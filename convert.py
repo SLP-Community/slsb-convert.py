@@ -1,7 +1,8 @@
-# Script Version: 0.9f (to be used with SLSB v1.5.3)
+# Script Version: 0.9g (to be used with SLSB v1.5.3)
 from typing import ClassVar, Iterable
 from datetime import datetime
 from pprint import pprint
+from pathlib import Path
 import subprocess
 import argparse
 import pathlib
@@ -16,19 +17,16 @@ class Arguments:
     #required
     slsb_path:str|None = None           # path to slsb.exe
     parent_dir:str|None = None          # path to dir containing slal packs/modules
-    clean:bool = False                  # True cleans up the temp_dir
     #recommended
     skyrim_path:str|None = None         # path to `basegame_replica` directory
     remove_anims:bool = False           # True cleans up HKXs copied for behavior gen
+    no_build:bool = False               # True skips building behaviour HKX files
     #public_release
     slate_path:str|None = None          # path to slate action logs
     slsb_json_path:str|None = None      # path to latest slsb project, for updates
     #optional
     stricter_futa:bool = False          # True skips assigning futa for positions with strap_on
     author:str|None = None              # name of the pack/conversion author
-    #not_recommended
-    post_conversion:bool = False        # True skips re-convesion, only re-attempts XML->HKX
-    no_build:bool = False               # True skips building SLSB SLRs 
     #auto_determined
     fnis_path:str|None = None           # path to fnis for modders
     tmp_log_dir:str|None = None         # path to generated XMLs
@@ -39,35 +37,31 @@ class Arguments:
         parser = argparse.ArgumentParser(prog='SexLab Catalytic Converter', description='Converts SLAL animation packs to SLSB automagically.')
         parser.add_argument('slsb', help='Path to SexLab_Scene_Builder.exe (slsb.exe).')
         parser.add_argument('parent', help='Path to directory containing SLAL packs; should be structured as {<parent_dir>/<slal_pack>/SLAnims/json/}.') 
-        parser.add_argument('-c', '--clean_temp', help='Clean up the directory created temporarily to handle SLSB projects editing.', action='store_true')
         parser.add_argument('-s', '--skyrim', help='Path to skyrim base game directory (basegame_replica).')
         parser.add_argument('-ra', '--remove_anims', help='Cleans up animation meshes copied for behavior generation; safe to remove.', action='store_true')
+        parser.add_argument('-nb', '--no_build', action='store_true', help='Skip building behaviour HKX files; useful for dry-testing script changes.')
         parser.add_argument('-slt', '--slate', dest='slate', help='Path to the directory containing SLATE action log json(s).')
         parser.add_argument('-upd', '--update', dest='update', help='Path to the directory containing SLSB project jsons; use if updating a public conversion.')
         parser.add_argument('-sf', '--stricter_futa', dest='stricter_futa', help='Skip additional futa flags for positions with strap-on (avoid, unless perfect alignments matter).', action='store_true')
         parser.add_argument('-a', '--author', help='Name of the SLAL pack author (avoid, unless converting a single pack).')
-        parser.add_argument('-pco', '--post_conversion', action='store_true', help='Skip re-conversion, only re-attempt XML->HKX')
-        parser.add_argument('-nb', '--no_build', action='store_true', help='Skip building SLSB SLRs from the edited SLSB project files.')
         args = parser.parse_args()
         return args
 
     @staticmethod
     def process_arguments():
         args = Arguments.setup_arguments()
-        Arguments.slsb_path = args.slsb
-        Arguments.parent_dir = args.parent
-        Arguments.clean = args.clean_temp
-        Arguments.skyrim_path = args.skyrim
+        Arguments.slsb_path = os.path.abspath(args.slsb)
+        Arguments.parent_dir = os.path.abspath(args.parent)
+        Arguments.skyrim_path = os.path.abspath(args.skyrim)
         Arguments.remove_anims = args.remove_anims
-        Arguments.slate_path = args.slate
-        Arguments.slsb_json_path = args.update
+        Arguments.no_build = args.no_build
+        Arguments.slate_path = os.path.abspath(args.slate)
+        Arguments.slsb_json_path = os.path.abspath(args.update)
         Arguments.stricter_futa = args.stricter_futa
         Arguments.author = args.author if args.author else 'Unknown'
-        Arguments.post_conversion = args.post_conversion
-        Arguments.no_build = args.no_build
         Arguments.fnis_path = os.path.join(Arguments.skyrim_path, 'Data/tools/GenerateFNIS_for_Modders') if args.skyrim else None
         Arguments.tmp_log_dir = os.path.join(Arguments.fnis_path, 'temporary_logs') if Arguments.fnis_path else None
-        Arguments.temp_dir = './tmp'
+        Arguments.temp_dir = os.path.join(Arguments.skyrim_path, 'tmp_slsb_dir')
 
     @staticmethod
     def debug(*content):
@@ -79,7 +73,7 @@ class Keywords:
     DOMINANT:list[str] = ['rough', 'bound', 'dominant', 'domsub', 'femdom', 'femaledomination', 'maledom', 'lezdom', 'gaydom', 'bdsm']
     FORCED:list[str] = ['force', 'forced', 'rape', 'fbrape', 'defeated', 'conquering', 'humiliation', 'estrus']
     USES_ONLY_AGG_TAG:list[str] = ['leito', 'kom', 'flufyfox', 'gs', 'cobalt', 'mastermike', 'nya', 'rydin', 'nibbles', 'anubs']
-    UNCONSCIOUS:list[str] = ['necro', 'dead', 'unconscious']#, 'sleep', 'drunk']
+    UNCONSCIOUS:list[str] = ['necro', 'dead', 'unconscious']#, 'sleep', 'drunk', 'faint']
     FUTA:list[str] = ['futa', 'futanari', 'futaxfemale']
     LEADIN:list[str] = ['kissing', 'hugging', 'holding', 'loving', 'foreplay', 'lying', 'kneeling', 'cuddle', 'sfw', 'romance']
     NOT_LEADIN:list[str] = ['vaginal', 'anal', 'oral', 'blowjob', 'cunnilingus', 'forced', 'sex', 'masturbation']
@@ -98,7 +92,7 @@ class Keywords:
         'benches': ['Bench', 'BenchNoble', 'BenchMisc'],
         'thrones': ['Throne', 'ThroneRiften', 'ThroneNordic'],
         'contraptions': ['XCross', 'Pillory']}
-    TIMESTAMP = datetime.now().strftime('[%Y%m%d_%H%M%S]')
+    TIMESTAMP = datetime.now().strftime('[%Y.%m.%d_%H.%M.%S]')
     # Regex Patterns
     ANIM_PREFIX_PATTERN = re.compile(r'^\s*anim_name_prefix\("([^"]*)"\)')
     DIR_NAME_PATTERN = re.compile(r'anim_dir\("([^"]*)"\)')
@@ -276,6 +270,14 @@ class TagsRepairer:
         return subtags_found
 
     @staticmethod
+    def insert_legacy_stage_counts(tags:list[str], stages_count:int, stage_num:int):
+        legacy_stage_count_tag:str = 'stg_cnt_' + str(stages_count)
+        legacy_stage_num_tag:str = 'stg_num_' + str(stage_num)
+        TagUtils.bulk_add(tags, legacy_stage_num_tag)
+        if stage_num == stages_count: # that is, is_end_stage:bool==True
+            TagUtils.bulk_add(tags, legacy_stage_count_tag)
+
+    @staticmethod
     def fix_leadin_tag(tags):
         TagUtils.if_then_remove(tags, ['leadin'], ['asltagged'], 'leadin')
         if any(kwd in tags for kwd in Keywords.LEADIN) and all(kwd not in tags for kwd in Keywords.NOT_LEADIN):
@@ -396,15 +398,15 @@ class SLATE:
             TagUtils.if_then_add(tags,'','', ['vaginal', 'anal'], '', 'triplepenetration')
         if 'sdp' in rimtags or 'fdp' in rimtags:
             TagUtils.bulk_add(tags, 'doublepenetration')
-        TagUtils.if_in_then_add(tags, rimtags, ['fst','bst','fvp','fap','fcg','fac','fdp','fdv','fda','fhj','ftf','fmf','ffj','fbj'], 'aslfast')
-        TagUtils.if_in_then_add(tags, rimtags, ['sst','svp','sap','scg','sac','sdp','sdv','sda','shj','stf','smf','sfj','kis','cun','sbj'], 'aslslow')
+        TagUtils.if_in_then_add(tags, rimtags, ['fst','bst','fvp','fap','fcg','fac','fdp','fdv','fda','fhj','ftf','fmf','ffj','fbj'], 'rimfast')
+        TagUtils.if_in_then_add(tags, rimtags, ['sst','svp','sap','scg','sac','sdp','sdv','sda','shj','stf','smf','sfj','kis','cun','sbj'], 'rimslow')
         if not TagUtils.if_any_found(tags, Keywords.HENTAIRIM_TAGS):
             TagUtils.bulk_add(tags, 'leadin')
 
     @staticmethod
     def check_asl_tags(tags:list[str], stage_num:int) -> None:
-        if f'{stage_num}en' in tags:
-            stage_num = stage_num - 1
+        #if f'{stage_num}en' in tags:
+        #    stage_num = stage_num - 1
         asltags = {
             'en': '{stage}en',  # end_stage
             'li': '{stage}li',  # lead_in
@@ -461,8 +463,8 @@ class SLATE:
             TagUtils.bulk_add(tags, ['doublepenetration', 'vaginal', 'anal'])
         if 'tp' in asltags:
             TagUtils.bulk_add(tags, ['triplepenetration', 'oral', 'vaginal', 'anal'])
-        TagUtils.if_in_then_add(tags, asltags, ['sb','sv','sa'], 'aslslow')
-        TagUtils.if_in_then_add(tags, asltags, ['fb','fv','fa'], 'aslfast')
+        TagUtils.if_in_then_add(tags, asltags, ['sb','sv','sa'], 'rimslow')
+        TagUtils.if_in_then_add(tags, asltags, ['fb','fv','fa'], 'rimfast')
         TagUtils.bulk_remove(tags, ['sranaltmp', 'srvagtmp'])
 
     @staticmethod
@@ -489,27 +491,24 @@ class SLATE:
             tags[:] = [tag for tag in tags if tag not in non_stage_tags]
 
     @staticmethod
-    def implement_slate_tags(tags:list[str], stage_num:int, positions) -> None:
+    def implement_slate_tags(tags:list[str], stage_num:int, stage_positions:list[dict]) -> None:
         if StoredData.cached_variables["action_logs_found"]:
             rimtags:list[str] = []
-            rim_pos_tags:list[str] = []
-            for i in range(len(positions)):
-                pos = positions[i]
+            for i, tmp_stage_pos in enumerate(stage_positions):
                 pos_ind:str = ''
-                for pos in positions:
-                    if i == 0:
-                        pos_ind = 'a'
-                    elif i == 1:
-                        pos_ind = 'b'
-                    elif i == 2:
-                        pos_ind = 'c'
-                    elif i == 3:
-                        pos_ind = 'd'
-                    elif i == 4:
-                        pos_ind = 'e'
-                    rimtags_found:list[str] = SLATE.check_hentairim_tags(tags, stage_num, pos_ind)
-                    rim_pos_tags = rimtags_found    #TODO: rely upon this to introduce position tags
-                    TagUtils.bulk_add(rimtags, rimtags_found) # appends unique rimtags_found to rimtags
+                if i == 0:
+                    pos_ind = 'a'
+                elif i == 1:
+                    pos_ind = 'b'
+                elif i == 2:
+                    pos_ind = 'c'
+                elif i == 3:
+                    pos_ind = 'd'
+                elif i == 4:
+                    pos_ind = 'e'
+                rimtags_found:list[str] = SLATE.check_hentairim_tags(tags, stage_num, pos_ind)
+                TagUtils.bulk_add(tmp_stage_pos['extra']['custom'], rimtags_found)      # rim_pos_tags (position specific tags)
+                TagUtils.bulk_add(rimtags, rimtags_found)                               # appends unique rimtags_found to rimtags
             if rimtags:
                 SLATE.implement_hentairim_tags(tags, rimtags)
             asltags:list[str] = SLATE.check_asl_tags(tags, stage_num)
@@ -735,8 +734,7 @@ class Editors:
         anim_meshes_dir = working_dir + "\\meshes\\actors\\character\\animations"
 
         def prompt_for_existing_dir(dirs, anim_dir_path, json_base_name):
-            Arguments.debug('')
-            Arguments.debug(f"ERROR: Could not auto-determine AnimDirName for: {json_base_name}.json")
+            Arguments.debug(f"\nERROR: Could not auto-determine AnimDirName for: {json_base_name}.json")
             if not dirs:
                 raise ValueError(f"No valid directories found in {anim_dir_path}")
             Arguments.debug("Please select from these existing directories:")
@@ -799,7 +797,6 @@ class Editors:
                                     changes_made = True
             return changes_made
 
-        Arguments.debug("---------> FIXING SLAL JSONs")
         for filename in os.listdir(slal_jsons_dir):
             slal_json_path = os.path.join(slal_jsons_dir, filename)
             anim_dir_name:str = find_animdirname(filename, slal_json_path)
@@ -815,6 +812,7 @@ class Editors:
                     changes_made = True
                 # Edit the SLAL json
                 if changes_made:
+                    Arguments.debug("---------> FIXING SLAL JSONs")
                     json_file.seek(0)
                     json.dump(json_data, json_file, indent=2)
                     json_file.truncate()
@@ -850,27 +848,27 @@ class Editors:
 class ActorUtils:
 
     @staticmethod
-    def process_pos_flag_futa_1(tags, pos, pos_length, pos_num, event_name):
+    def process_pos_flag_futa_1(tags:list[str], scene_pos:dict[str,any], pos_length:int, pos_num:int, event_name:str):
         # initial preparations
         if 'futa' not in tags:
             return
         if 'kom_futaduo' in event_name:
-            pos['sex']['female'] = False
-            pos['sex']['male'] = True
+            scene_pos['sex']['female'] = False
+            scene_pos['sex']['male'] = True
         if 'futafurniture01(bed)' in event_name:
             if pos_num == 0:
-                pos['sex']['female'] = False
-                pos['sex']['futa'] = True
+                scene_pos['sex']['female'] = False
+                scene_pos['sex']['futa'] = True
             if pos_num == 1:
-                pos['sex']['male'] = False
-                pos['sex']['female'] = True
+                scene_pos['sex']['male'] = False
+                scene_pos['sex']['female'] = True
         if 'gs' in tags and 'mf' in tags and pos_length == 2:
-            if not pos['sex']['male'] and pos_num == 1:
-                pos['sex']['female'] = False
-                pos['sex']['futa'] = True
+            if not scene_pos['sex']['male'] and pos_num == 1:
+                scene_pos['sex']['female'] = False
+                scene_pos['sex']['futa'] = True
 
     @staticmethod
-    def process_pos_flag_sub(tags, pos, pos_num, sub_tags, is_sub_scene):
+    def process_pos_flag_sub(tags:list[str], scene_pos:dict[str,any], pos_num:int, sub_tags:list[str], is_sub_scene:bool):
         # IMP: Deal with sub/dead flags before futa flags
         if is_sub_scene:
             straight:bool = StoredData.pos_counts['straight']
@@ -879,144 +877,131 @@ class ActorUtils:
             male_count:int = StoredData.pos_counts['male']
             female_count:int = StoredData.pos_counts['female']
             
-            if straight and female_count == 1 and 'femdom' not in tags and pos['sex']['female']:
-                pos['extra']['submissive'] = True
+            if straight and female_count == 1 and 'femdom' not in tags and scene_pos['sex']['female']:
+                scene_pos['extra']['submissive'] = True
             if straight and female_count == 2 and 'femdom' not in tags: #needs_testing
-                if pos['sex']['female']:
-                    pos['extra']['submissive'] = True
-            if straight and ('femdom' in tags or 'ffffm' in tags) and pos['sex']['male']:
-                pos['extra']['submissive'] = True
-            if gay and ((male_count == 2 and pos_num == 0) or ('hcos' in tags and pos['race'] in {'Rabbit', 'Skeever', 'Horse'})): # needs_testing
-                pos['extra']['submissive'] = True
+                if scene_pos['sex']['female']:
+                    scene_pos['extra']['submissive'] = True
+            if straight and ('femdom' in tags or 'ffffm' in tags) and scene_pos['sex']['male']:
+                scene_pos['extra']['submissive'] = True
+            if gay and ((male_count == 2 and pos_num == 0) or ('hcos' in tags and scene_pos['race'] in {'Rabbit', 'Skeever', 'Horse'})): # needs_testing
+                scene_pos['extra']['submissive'] = True
             if lesbian and pos_num == 0: # needs_testing
-                pos['extra']['submissive'] = True
+                scene_pos['extra']['submissive'] = True
 
-            if TagUtils.if_any_found(sub_tags, ['unconscious', 'gore', 'amputee']) and pos['extra']['submissive']:
-                pos['extra']['submissive'] = False
-                pos['extra']['dead'] = True
-            #if 'billyy' in tags and 'cf' in tags and pos['extra']['submissive']:
-            #   pos['extra']['submissive'] = False
+            if TagUtils.if_any_found(sub_tags, ['unconscious', 'gore', 'amputee']) and scene_pos['extra']['submissive']:
+                scene_pos['extra']['submissive'] = False
+                scene_pos['extra']['dead'] = True
+            #if 'billyy' in tags and 'cf' in tags and scene_pos['extra']['submissive']:
+            #   scene_pos['extra']['submissive'] = False
 
     @staticmethod
-    def process_pos_flag_futa_2(tags, pos, pos_num, actor_key):
+    def process_pos_flag_futa_2(tags:list[str], scene_pos:dict[str,any], pos_num:int, actor_key:str):
         if 'futa' not in tags:
             return
         if 'anubs' in tags and ('ff' in tags or 'fff' in tags):
             if actor_key[1:] in StoredData.tmp_params['has_schlong']:
-                #pos_num = int(actor_key[1:]) - 1
-                #for pos in [positions[pos_num]]:
                 if pos_num == int(actor_key[1:]) - 1:
-                    pos['sex']['female'] = False
-                    pos['sex']['futa'] = True
+                    scene_pos['sex']['female'] = False
+                    scene_pos['sex']['futa'] = True
         if 'flufyfox' in tags or 'milky' in tags:
             if actor_key[1:] in StoredData.tmp_params['has_strap_on']:
-                #pos_num = int(actor_key[1:]) - 1
-                #for pos in [positions[pos_num]]:
                 if pos_num == int(actor_key[1:]) - 1:
-                    pos['sex']['female'] = False
-                    pos['sex']['futa'] = True
+                    scene_pos['sex']['female'] = False
+                    scene_pos['sex']['futa'] = True
 
     @staticmethod
-    def process_pos_flag_futa_3(tags, pos, pos_length, pos_num):
+    def process_pos_flag_futa_3(tags:list[str], scene_pos:dict[str,any], pos_length:int, pos_num:int):
         if 'futa' not in tags:
             return
         if 'solo' in tags or 'futaall' in tags or ('anubs' in tags and 'mf' in tags) or ('ff' in tags and ('frotting' in tags or 'milking' in tags)):
-            #for pos in stage['positions']:
-            if pos['sex']['female']:
-                pos['sex']['female'] = False
-                pos['sex']['futa'] = True
+            if scene_pos['sex']['female']:
+                scene_pos['sex']['female'] = False
+                scene_pos['sex']['futa'] = True
         elif 'billyy' in tags and '2futa' in tags and pos_length == 3:
-            #for pos in [positions[0], positions[1]]:
             if pos_num == 0|1:
-                pos['sex']['female'] = False
-                pos['sex']['futa'] = True
-        elif 'ff' in tags and pos['sex']['male']:
-            pos['sex']['male'] = False
-            pos['sex']['futa'] = True
+                scene_pos['sex']['female'] = False
+                scene_pos['sex']['futa'] = True
+        elif 'ff' in tags and scene_pos['sex']['male']:
+            scene_pos['sex']['male'] = False
+            scene_pos['sex']['futa'] = True
 
     @staticmethod
-    def process_pos_flag_vampire(tags, pos, event_name):
+    def process_pos_flag_vampire(tags:list[str], scene_pos:dict[str,any], event_name:str):
         if 'vampire' not in tags:
             return
-        if TagUtils.if_any_found(tags, ['vampirefemale','vampirelesbian', 'femdom', 'cowgirl', 'vampfeedf'], event_name) and pos['sex']['female']:
-            pos['extra']['vampire'] = True
-        elif pos['sex']['male']:
-            pos['extra']['vampire'] = True
+        if TagUtils.if_any_found(tags, ['vampirefemale','vampirelesbian', 'femdom', 'cowgirl', 'vampfeedf'], event_name) and scene_pos['sex']['female']:
+            scene_pos['extra']['vampire'] = True
+        elif scene_pos['sex']['male']:
+            scene_pos['extra']['vampire'] = True
 
     @staticmethod
-    def process_pos_scaling(name, tags, pos):
+    def process_pos_scaling(name:str, tags:list[str], scene_pos:dict[str,any]):
         if not ('bigguy' in tags or 'scaling' in tags):
             return
         bigguy_value = Keywords.BIGGUY_PATTERN.search(name.lower())
         scaling_value = Keywords.SCALING_PATTERN.search(name.lower())
         if bigguy_value:
-            #for pos in positions:
-            if pos['sex']['male']:
-                pos['scale'] = round(float(bigguy_value.group(2)), 2)
+            if scene_pos['sex']['male']:
+                scene_pos['scale'] = round(float(bigguy_value.group(2)), 2)
         if scaling_value:
             value = round(float(scaling_value.group(2)), 2)
-            if 'gs orc' in name.lower() and pos['sex']['male']:
-                pos['scale'] = value
-            if 'gs giantess' in name.lower() and pos['sex']['female']:
-                pos['scale'] = value
-            if 'hcos small' in name.lower() and pos['race'] == 'Dragon':
-                pos['scale'] = value
+            if 'gs orc' in name.lower() and scene_pos['sex']['male']:
+                scene_pos['scale'] = value
+            if 'gs giantess' in name.lower() and scene_pos['sex']['female']:
+                scene_pos['scale'] = value
+            if 'hcos small' in name.lower() and scene_pos['race'] == 'Dragon':
+                scene_pos['scale'] = value
 
     @staticmethod
-    def process_pos_leadin(tags, pos):
+    def process_pos_leadin(tags:list[str], stage_pos:dict[str,any]):
         if 'leadin' in tags:
-            pos['strip_data']['default'] = False
-            pos['strip_data']['helmet'] = True
-            pos['strip_data']['gloves'] = True
+            stage_pos['strip_data']['default'] = False
+            stage_pos['strip_data']['helmet'] = True
+            stage_pos['strip_data']['gloves'] = True
 
     @staticmethod
-    def process_pos_animobjects(pos, event_name, out_dir):
+    def process_pos_animobjects(stage_pos:dict[str,any], event_name:str, out_dir:str):
         if event_name and event_name in StoredData.slal_fnislists_data.keys():
             required_info = StoredData.slal_fnislists_data[event_name]
-            pos['event'][0] = os.path.splitext(required_info['anim_file_name'])[0]
+            stage_pos['event'][0] = os.path.splitext(required_info['anim_file_name'])[0]
             if Arguments.skyrim_path is not None:
                 os.makedirs(os.path.dirname(os.path.join(out_dir, required_info['out_path'])), exist_ok=True)
                 shutil.copyfile(required_info['path'], os.path.join(out_dir, required_info['out_path']))
             if 'anim_obj' in required_info and required_info['anim_obj'] is not None:
-                pos['anim_obj'] = ','.join(required_info['anim_obj'])
+                stage_pos['anim_obj'] = ','.join(required_info['anim_obj'])
 
     @staticmethod
-    def allow_flexible_futa(pos, pos_num, actor_key):
+    def allow_flexible_futa(scene_pos:dict[str,any], pos_num:int, actor_key:str):
         if Arguments.stricter_futa:
             return
         if actor_key[1:] in StoredData.tmp_params['has_strap_on']:
-            #pos_num = int(actor_key[1:]) - 1
-            #for pos in [positions[pos_num]]:
             if pos_num == int(actor_key[1:]) - 1:
-                if pos['race'] == 'Human':
-                    pos['sex']['futa'] = True
+                if scene_pos['race'] == 'Human':
+                    scene_pos['sex']['futa'] = True
 
     @staticmethod
-    def relax_creature_gender(pos):
-        if pos['race'] in Keywords.FEM_CRE_BODY_ONLY:
-            pos['sex']['female'] = True
-            pos['sex']['male'] = True
+    def relax_creature_gender(scene_pos:dict[str,any]):
+        if scene_pos['race'] in Keywords.FEM_CRE_BODY_ONLY:
+            scene_pos['sex']['female'] = True
+            scene_pos['sex']['male'] = True
         if StoredData.pos_counts['human_male'] and StoredData.pos_counts['cre_female'] and \
             (StoredData.pos_counts['cre_male'] + StoredData.pos_counts['human_female'] == 0):
-            if pos['sex']['male']:
-                pos['sex']['futa'] = True
+            if scene_pos['sex']['male']:
+                scene_pos['sex']['futa'] = True
 
 #############################################################################################
 class ParamUtils:
 
     @staticmethod
-    #def process_actorstage_params(params_data, positions, stage_num, actor_key, event_key):
-    def process_actorstage_params(params_data, stage_num, pos, pos_num, actor_key, event_key):
+    def process_actorstage_params(params_data, stage_pos:dict[str,any], stage_num:int, pos_num:int, actor_key:str, event_key:str):
 
         def process_pos_sos():
             if 'sos' in params_data and params_data['sos'] != 0:
-                # sos value integration
+                # for sos value integration
                 has_sos_value = event_key
-                if event_key in has_sos_value and int(event_key[4:]) == stage_num:
-                    #pos_num = int(actor_key[1:]) - 1
-                    #for pos in [positions[pos_num]]:
-                    if pos_num == int(actor_key[1:]) - 1:
-                        pos['schlong'] = params_data['sos']
+                if (event_key in has_sos_value) and (stage_num == int(event_key[4:])) and (pos_num == int(actor_key[1:]) - 1):
+                   stage_pos['schlong'] = params_data['sos']
                 # for futa
                 if StoredData.tmp_params['has_schlong'] and actor_key[1:] not in StoredData.tmp_params['has_schlong']:
                     StoredData.tmp_params['has_schlong'] += f",{actor_key[1:]}"
@@ -1034,31 +1019,23 @@ class ParamUtils:
             if 'forward' in params_data and params_data['forward'] != 0:
                 has_forward = event_key
                 if event_key in has_forward and int(event_key[4:]) == stage_num:
-                    #pos_num = int(actor_key[1:]) - 1
-                    #for pos in [positions[pos_num]]:
                     if pos_num == int(actor_key[1:]) - 1:
-                        pos['offset']['y'] = params_data['forward']
+                        stage_pos['offset']['y'] = params_data['forward']
             if 'side' in params_data and params_data['side'] != 0:
                 has_side = event_key
                 if event_key in has_side and int(event_key[4:]) == stage_num:
-                    #pos_num = int(actor_key[1:]) - 1
-                    #for pos in [positions[pos_num]]:
                     if pos_num == int(actor_key[1:]) - 1:
-                        pos['offset']['x'] = params_data['side']
+                        stage_pos['offset']['x'] = params_data['side']
             if 'up' in params_data and params_data['up'] != 0:
                 has_up = event_key
                 if event_key in has_up and int(event_key[4:]) == stage_num:
-                    #pos_num = int(actor_key[1:]) - 1
-                    #for pos in [positions[pos_num]]:
                     if pos_num == int(actor_key[1:]) - 1:
-                        pos['offset']['z'] = params_data['up']
+                        stage_pos['offset']['z'] = params_data['up']
             if 'rotate' in params_data and params_data['rotate'] != 0:
                 has_rotate = event_key
                 if event_key in has_rotate and int(event_key[4:]) == stage_num:
-                    #pos_num = int(actor_key[1:]) - 1
-                    #for pos in [positions[pos_num]]:
                     if pos_num == int(actor_key[1:]) - 1:
-                        pos['offset']['r'] = params_data['rotate']
+                        stage_pos['offset']['r'] = params_data['rotate']
 
         # - - - - - - - - - - - - -
         process_pos_sos()
@@ -1067,7 +1044,7 @@ class ParamUtils:
         # - - - - - - - - - - - - -
 
     @staticmethod
-    def process_actor_params(params_data, pos, pos_num, stage_num, actor_key):
+    def process_actor_params(params_data, stage_pos:dict[str,any], stage_num:int, pos_num:int, actor_key:str):
 
         def process_pos_cum():
             if 'add_cum' in params_data and params_data['add_cum'] != 0:
@@ -1083,7 +1060,7 @@ class ParamUtils:
                 event_key = f"{actor_key}" + f"_s{actor_stage_params_key[6:]}"
                 if actor_stage_params_key.startswith('Stage'):
                     source_actor_stage_params = actor_stage_params_map[actor_stage_params_key]
-                    ParamUtils.process_actorstage_params(source_actor_stage_params, stage_num, pos, pos_num, actor_key, event_key)
+                    ParamUtils.process_actorstage_params(source_actor_stage_params, stage_pos, stage_num, pos_num, actor_key, event_key)
 
         # - - - - - - - - - - - - -
         process_pos_cum()
@@ -1091,7 +1068,7 @@ class ParamUtils:
         # - - - - - - - - - - - - -
 
     @staticmethod
-    def incorporate_slal_json_data(name, stage_num, tags, pos, pos_num):
+    def incorporate_slal_json_data(name:str, stage_num:int, tags:list[str], scene_pos:dict[str,any], stage_pos:dict[str,any], pos_num:int):
         if name in StoredData.slal_jsons_data:
             slal_json_data = StoredData.slal_jsons_data[name]
             actor_map = slal_json_data['actors']
@@ -1100,13 +1077,13 @@ class ParamUtils:
                     actor_key = key
                     if actor_key.startswith('a'):
                         source_actor_data = actor_map[actor_key]
-                        ParamUtils.process_actor_params(source_actor_data, pos, pos_num, stage_num, actor_key)
+                        ParamUtils.process_actor_params(source_actor_data, stage_pos, stage_num, pos_num, actor_key)
                         # Actor-Specific Fine Tuning
-                        ActorUtils.process_pos_flag_futa_2(tags, pos, pos_num, actor_key)
-                        ActorUtils.allow_flexible_futa(pos, pos_num, actor_key)
+                        ActorUtils.process_pos_flag_futa_2(tags, scene_pos, pos_num, actor_key)
+                        ActorUtils.allow_flexible_futa(scene_pos, pos_num, actor_key)
 
     @staticmethod
-    def process_stage_params(name, stage, stage_num):
+    def process_stage_params(name:str, stage:dict[str,any], stage_num:int):
         if name not in StoredData.slal_jsons_data:
             return
         slal_json_data = StoredData.slal_jsons_data[name]
@@ -1119,27 +1096,26 @@ class ParamUtils:
                 if 'timer' in source_stage_params and source_stage_params['timer'] != 0:
                     if int(stage_params_key[6:]) == stage_num:
                         #fixed_length = round(float(source_stage_params['timer']), 2)
-                        fixed_length = round(float(source_stage_params['timer']) * 1000)
-                        #timers in miliseconds
+                        fixed_length = round(float(source_stage_params['timer']) * 1000) #timers in miliseconds
                         stage['extra']['fixed_len'] = fixed_length
 
 #############################################################################################
 class StageUtils:
 
     @staticmethod
-    def update_pos_counts(positions):
+    def update_pos_counts(scene_positions:list[dict]):
         def reset_pos_counts():
             for key in ['male', 'female', 'human_male', 'cre_male', 'human_female', 'cre_female', 'cre_count']:
                 StoredData.pos_counts[key] = 0
             for key in ['straight', 'gay', 'lesbian']:
                 StoredData.pos_counts[key] = False
         reset_pos_counts()
-        for tmp_pos in positions:
-            is_human = (tmp_pos['race'] == 'Human')
-            if tmp_pos['sex']['male']:
+        for tmp_scene_pos in scene_positions:
+            is_human = (tmp_scene_pos['race'] == 'Human')
+            if tmp_scene_pos['sex']['male']:
                 StoredData.pos_counts['male'] += 1
                 StoredData.pos_counts['human_male' if is_human else 'cre_male'] += 1
-            if tmp_pos['sex']['female']:
+            if tmp_scene_pos['sex']['female']:
                 StoredData.pos_counts['female'] += 1
                 StoredData.pos_counts['human_female' if is_human else 'cre_female'] += 1
         StoredData.pos_counts['cre_count'] = StoredData.pos_counts['cre_male'] + StoredData.pos_counts['cre_female']
@@ -1150,10 +1126,10 @@ class StageUtils:
         StoredData.pos_counts['lesbian'] = male_count == 0 and female_count > 0
 
     @staticmethod
-    def process_stage_furniture(name, tags, positions, furniture, anim_obj_found):
+    def process_stage_furniture(name:str, tags:list[str], furniture:dict, pos_length:int, anim_obj_found:bool):
         
         def incorporate_allowbed():
-            if anim_obj_found or len(positions) > 2:
+            if anim_obj_found or pos_length > 2:
                 return
             if 'invisfurn' in tags or 'lying' not in tags or StoredData.pos_counts['cre_count'] > 0 :
                 return
@@ -1183,51 +1159,52 @@ class StageUtils:
 class StageProcessor:
 
     @staticmethod
-    def process_stage(scene, stage, stage_num, anim_dir_name, out_dir):
-        name = scene['name']
-        tags = [tag.lower().strip() for tag in stage['tags']]
-        positions = stage['positions']
-        furniture = scene['furniture']
+    def process_stage(scene, stage, stages_count, stage_num, anim_dir_name, out_dir):
+        name:str = scene['name']
+        tags:list[str] = [tag.lower().strip() for tag in stage['tags']]
+        furniture:dict[str,any] = scene['furniture']
+        scene_positions:list[dict] = stage['positions']     # pre-1.0
+        stage_positions:list[dict] = stage['positions']
 
         SLATE.insert_slate_tags(tags, name)
         TagsRepairer.update_stage_tags(name, tags, anim_dir_name)
+        #TagsRepairer.insert_legacy_stage_counts(tags, stages_count, stage_num)
 
         is_sub_scene:bool = False
         sub_tags:list[str] = TagsRepairer.fix_submissive_tags(tags, name, anim_dir_name)
         if sub_tags:
             is_sub_scene = True
 
-        SLATE.implement_slate_tags(tags, stage_num, positions)
+        SLATE.implement_slate_tags(tags, stage_num, stage_positions)
         TagsRepairer.fix_leadin_tag(tags)
-        StageUtils.update_pos_counts(positions)
+        StageUtils.update_pos_counts(scene_positions)
 
-        has_cre_vamplord:bool = any(tmp_pos['race']=="Vampire Lord" for tmp_pos in positions)
+        has_cre_vamplord:bool = any(tmp_scene_pos['race']=="Vampire Lord" for tmp_scene_pos in scene_positions)
         
-        pos_length = len(positions)
+        pos_length:int = len(scene_positions)
         for i in range(pos_length):
-            pos = positions[i]
-            pos_num = i
+            stage_pos:dict[str,any] = stage_positions[i]
+            scene_pos:dict[str,any] = scene_positions[i]
+            pos_num:int = i
             event_name:str|None = None
-            if pos['event'] and len(pos['event']) > 0:
-                event_name = pos['event'][0].lower()
+            if stage_pos['event'] and len(stage_pos['event']) > 0:
+                event_name = stage_pos['event'][0].lower()
 
+            ActorUtils.process_pos_animobjects(stage_pos, event_name, out_dir)
             TagsRepairer.fix_vampire_tags(name, tags, event_name, has_cre_vamplord)
-            ActorUtils.relax_creature_gender(pos)
-            ActorUtils.process_pos_flag_futa_1(tags, pos, pos_length, pos_num, event_name)
-            ActorUtils.process_pos_animobjects(pos, event_name, out_dir)
-            ActorUtils.process_pos_flag_sub(tags, pos, pos_num, sub_tags, is_sub_scene)
-            ParamUtils.incorporate_slal_json_data(name, stage_num, tags, pos, pos_num)
-            ActorUtils.process_pos_flag_vampire(tags, pos, event_name)
-            ActorUtils.process_pos_flag_futa_3(tags, pos, pos_length, pos_num)
-            ActorUtils.process_pos_scaling(name, tags, pos)
-            #ActorUtils.process_pos_leadin(tags, pos)
+            ActorUtils.relax_creature_gender(scene_pos)
+            ActorUtils.process_pos_flag_futa_1(tags, scene_pos, pos_length, pos_num, event_name)
+            ActorUtils.process_pos_flag_sub(tags, scene_pos, pos_num, sub_tags, is_sub_scene)
+            ParamUtils.incorporate_slal_json_data(name, stage_num, tags, scene_pos, stage_pos, pos_num)
+            ActorUtils.process_pos_flag_vampire(tags, scene_pos, event_name)
+            ActorUtils.process_pos_flag_futa_3(tags, scene_pos, pos_length, pos_num)
+            ActorUtils.process_pos_scaling(name, tags, scene_pos)
+            #ActorUtils.process_pos_leadin(tags, stage_pos)
             
-        #-----------------
-        anim_obj_found:bool = any(tmp_pos['anim_obj'] != '' and 'cum' not in tmp_pos['anim_obj'].lower() for tmp_pos in positions)
+        anim_obj_found:bool = any(tmp_stage_pos['anim_obj'] != '' and 'cum' not in tmp_stage_pos['anim_obj'].lower() for tmp_stage_pos in stage_positions)
         TagsRepairer.fix_toys_tag(tags, anim_obj_found)
-
         ParamUtils.process_stage_params(name, stage, stage_num)
-        StageUtils.process_stage_furniture(name, tags, positions, furniture, anim_obj_found)
+        StageUtils.process_stage_furniture(name, tags, furniture, pos_length, anim_obj_found)
 
         stage['tags'] = tags
         #-----------------
@@ -1277,10 +1254,11 @@ class StageProcessor:
                     new_scenes[scene['id']] = scene
 
                     stages = scene['stages']
-                    for i in range(len(stages)):
+                    stages_count:int = len(stages)
+                    for i in range(stages_count):
                         stage = stages[i]
                         stage_num = i + 1
-                        StageProcessor.process_stage(scene, stage, stage_num, anim_dir_name, out_dir)
+                        StageProcessor.process_stage(scene, stage, stages_count, stage_num, anim_dir_name, out_dir)
 
                         if stages_old != {}:
                             try:
@@ -1290,7 +1268,7 @@ class StageProcessor:
                                 #print(scene['name']) #for debugging on error
                                 pass
 
-                    # marks scenes as private (for manual conversions)
+                    # marks scenes as private (for manual conversion)
                     if anim_dir_name == 'ZaZAnimsSLSB' or anim_dir_name == 'DDSL': #or anim_dir_name == 'EstrusSLSB'
                         scene['private'] = True
 
@@ -1306,7 +1284,7 @@ class ConvertUtils:
     @staticmethod
     def execute_slsb_parsers():
         if Arguments.slsb_json_path is not None:
-            Arguments.debug("--> PARSING SLSB JSON PROJECTS")
+            Arguments.debug("\n--> PARSING SLSB JSON PROJECTS")
             for filename in os.listdir(Arguments.slsb_json_path):
                 path = os.path.join(Arguments.slsb_json_path, filename)
                 if os.path.isfile(path) and filename.lower().endswith(".slsb.json"):
@@ -1402,7 +1380,9 @@ class ConvertUtils:
             out_behavior_dir = os.path.join(out_dir, *out_path_parts[start_index:end_index], behaviour_folder)
             out_behaviour_path = os.path.join(out_behavior_dir, behavior_file_name)
             os.makedirs(out_behavior_dir, exist_ok=True)
-            shutil.copyfile(behaviour_path, out_behaviour_path)
+            if os.path.exists(out_behaviour_path):
+                os.remove(out_behaviour_path)
+            shutil.move(behaviour_path, out_behaviour_path)
 
         if Arguments.remove_anims:
             StoredData.anim_cleanup_dirs.add(parent_dir)
@@ -1429,7 +1409,7 @@ class ConvertMain:
     @staticmethod
     def do_convert_single(parent_dir, dir):
         working_dir = os.path.join(parent_dir, dir)
-        out_dir = os.path.join(parent_dir, 'conversion', dir)
+        out_dir = os.path.join(Path(parent_dir).parent, 'SLSB_Outputs', 'conversions '+Keywords.TIMESTAMP, dir)
 
         if os.path.exists(Arguments.temp_dir):
             shutil.rmtree(Arguments.temp_dir)
@@ -1456,26 +1436,26 @@ class ConvertMain:
             if os.path.isdir(path):
                 continue
             edited_path = Arguments.temp_dir + '/edited/' + filename
-            if not Arguments.no_build:
-                output = subprocess.Popen(f"{Arguments.slsb_path} build --in \"{edited_path}\" --out \"{out_dir}\"", stdout=subprocess.PIPE).stdout.read()
-                shutil.copyfile(edited_path, out_dir + '/SKSE/Sexlab/Registry/Source/' + filename)
+            output = subprocess.Popen(f"{Arguments.slsb_path} build --in \"{edited_path}\" --out \"{out_dir}\"", stdout=subprocess.PIPE).stdout.read()
+            shutil.copyfile(edited_path, out_dir + '/SKSE/Sexlab/Registry/Source/' + filename)
 
         slsb_fnis_list_dir = out_dir + '\\meshes\\actors'
         ConvertUtils.iter_fnis_lists(slsb_fnis_list_dir,'', Editors.edit_output_fnis)
-        if Arguments.fnis_path is not None:
+        if not Arguments.no_build and Arguments.fnis_path is not None:
             Arguments.debug("---------> BUILDING FNIS BEHAVIOUR")
             ConvertUtils.iter_fnis_lists(slsb_fnis_list_dir, out_dir, ConvertUtils.build_behaviour)
 
+        shutil.rmtree(Arguments.temp_dir)
         if Arguments.remove_anims:
             for d in StoredData.anim_cleanup_dirs:
                 ConvertUtils.do_remove_anims(d)
-        if Arguments.clean:
-            shutil.rmtree(Arguments.temp_dir)
 
 
     @staticmethod
     def do_convert_bulk():
         for dir_name in os.listdir(Arguments.parent_dir):
+            if dir_name.startswith("!"):
+                continue
             dir_path = os.path.join(Arguments.parent_dir, dir_name)
             if os.path.isdir(dir_path):
                 slal_dir_default = os.path.join(dir_path, 'SLAnims')            
@@ -1491,6 +1471,8 @@ class ConvertMain:
             Arguments.debug('\033[92m' + "[SOLUTION] Each SLAL pack has to be in its own sub-directory, even when converting a single pack." + '\033[0m')
         misplaced_slal_packs = []
         for item in os.listdir(Arguments.parent_dir):
+            if item.startswith("!"):
+                continue
             item_path = os.path.join(Arguments.parent_dir, item)
             if os.path.isdir(item_path):
                 slal_dir_default = os.path.join(item_path, 'SLAnims')            
@@ -1518,7 +1500,7 @@ class PostConversion: # HANDLES XMLs WITH SPACES (FOR ANUBS AND BAKA PACKS)
 
                 req_paths = []
                 for dest_root, dirs, dest_files in os.walk(required_structure):
-                    dirs[:] = [d for d in dirs if d.lower() != "conversion"]
+                    #dirs[:] = [d for d in dirs if d.lower() != "conversion"]
                     if file in dest_files:
                         req_paths.append(os.path.join(dest_root, file))
 
@@ -1559,7 +1541,7 @@ class PostConversion: # HANDLES XMLs WITH SPACES (FOR ANUBS AND BAKA PACKS)
                 os.rmdir(source_dir)
 
     @staticmethod
-    def execute_post_conversion():
+    def reattempt_behaviour_gen():
         if Arguments.tmp_log_dir is None:
             return
         for f in os.listdir(Arguments.tmp_log_dir):
@@ -1569,12 +1551,8 @@ class PostConversion: # HANDLES XMLs WITH SPACES (FOR ANUBS AND BAKA PACKS)
             return
         
         Arguments.debug("\n======== PROCESSING XMLs_WITH_SPACES ========")
-        rely_on_hkxcmd:bool = False
-        
         tmp_xml_subdir = os.path.join(Arguments.tmp_log_dir, "xml")
         tmp_hkx_subdir = os.path.join(Arguments.tmp_log_dir, "hkx")
-        if Arguments.post_conversion and os.path.exists(tmp_hkx_subdir):
-            shutil.rmtree(tmp_hkx_subdir)
         os.makedirs(tmp_xml_subdir, exist_ok=True)
         os.makedirs(tmp_hkx_subdir, exist_ok=True)
 
@@ -1587,73 +1565,36 @@ class PostConversion: # HANDLES XMLs WITH SPACES (FOR ANUBS AND BAKA PACKS)
                 shutil.move(path, new_path)
 
         Arguments.debug("---------> converting XMLs to HKXs")
-        if not any(f.lower() == "hkxconv.exe" for f in os.listdir()):
-            rely_on_hkxcmd = True
-        else:
-            command = ["hkxconv.exe", "convert", "-v hkx", tmp_xml_subdir, tmp_hkx_subdir]
-            try:
-                subprocess.run(command, check=True)
-            except:
-                rely_on_hkxcmd = True
-
-        if rely_on_hkxcmd:
-            Arguments.debug('\033[93m' + '[INFO] HKXCONV not found alongside convert.py or gave error(s); relying upon HKXCMD instead.' + '\033[0m')
-            for xml_file in os.listdir(tmp_xml_subdir):
-                if xml_file.lower().endswith(".xml"):
-                    hkxcmd_path = os.path.join(Arguments.fnis_path, "hkxcmd.exe")
-                    input_path = os.path.join(tmp_xml_subdir, xml_file)
-                    output_file = os.path.splitext(xml_file)[0] + ".hkx"
-                    output_path = os.path.join(tmp_hkx_subdir, output_file)
-                    command = [hkxcmd_path, "convert", "-v:amd64", os.path.normpath(input_path), os.path.normpath(output_path)]
-                    try:
-                        subprocess.run(command, check=True)
-                    except:
-                        Arguments.debug(f"Failed to convert: {xml_file}")
+        for xml_file in os.listdir(tmp_xml_subdir):
+            if xml_file.lower().endswith(".xml"):
+                hkxcmd_path = os.path.join(Arguments.fnis_path, "hkxcmd.exe")
+                input_path = os.path.join(tmp_xml_subdir, xml_file)
+                output_file = os.path.splitext(xml_file)[0] + ".hkx"
+                output_path = os.path.join(tmp_hkx_subdir, output_file)
+                command = [hkxcmd_path, "convert", "-v:amd64", os.path.normpath(input_path), os.path.normpath(output_path)]
+                try:
+                    subprocess.run(command, check=True)
+                except:
+                    Arguments.debug(f"Failed to convert: {xml_file}")
 
         Arguments.debug("---------> replicating source structure; stay patient...")
         PostConversion.replicate_structure(tmp_hkx_subdir, Arguments.parent_dir)
         Arguments.debug("---------> incorporating converted HKXs")
-        conversions_dir = os.path.join(Arguments.parent_dir, "conversion")
+        conversions_dir = os.path.join(Path(Arguments.parent_dir).parent, 'SLSB_Outputs', 'conversions '+Keywords.TIMESTAMP)
         PostConversion.move_with_replace(tmp_hkx_subdir, conversions_dir)
-
-    @staticmethod
-    def backup_last_conversion():
-        Arguments.debug('')
-        if os.path.exists(Arguments.parent_dir + "\\conversion"):
-            conversion_subdir = os.path.join(Arguments.parent_dir + "\\conversion", Keywords.TIMESTAMP)
-            os.makedirs(conversion_subdir, exist_ok=True)
-            for item in os.listdir(Arguments.parent_dir + "\\conversion"):
-                item_path = os.path.join(Arguments.parent_dir + "\\conversion", item)
-                if not (item.startswith('[') and item.endswith(']')):
-                    dest_path = os.path.join(conversion_subdir, item)
-                    shutil.move(item_path, dest_path)
-        if Arguments.tmp_log_dir is not None:
-            tmp_log_subdir = os.path.join(Arguments.tmp_log_dir, Keywords.TIMESTAMP)
-            os.makedirs(tmp_log_subdir, exist_ok=True)
-            for item in os.listdir(Arguments.tmp_log_dir):
-                item_path = os.path.join(Arguments.tmp_log_dir, item)
-                if os.path.isdir(item_path) and not (item.startswith('[') and item.endswith(']')):
-                    dir_path = os.path.join(Arguments.tmp_log_dir, item)
-                    dest_dir = os.path.join(tmp_log_subdir, os.path.relpath(dir_path, Arguments.tmp_log_dir))
-                    shutil.move(dir_path, dest_dir)
-                if item.lower().endswith(('.xml', '.hkx')):
-                    file_path = os.path.join(Arguments.tmp_log_dir, item)
-                    dest_file = os.path.join(tmp_log_subdir, os.path.relpath(file_path, Arguments.tmp_log_dir))
-                    os.makedirs(os.path.dirname(dest_file), exist_ok=True)
-                    shutil.move(file_path, dest_file)
+        
+        #reset tmp_logs_dir
+        shutil.rmtree(Arguments.tmp_log_dir)
+        os.makedirs(Arguments.tmp_log_dir, exist_ok=True)
 
 #############################################################################################
 def execute_script():
     start_time = time.time()
     Arguments.process_arguments()
-    if Arguments.post_conversion:
-        Arguments.debug('\n\033[92m' + "=========> REATTEMPTING POST-CONVERSION" + '\033[0m')
-    else:
-        PostConversion.backup_last_conversion()
-        ConvertUtils.execute_slsb_parsers()
-        ConvertMain.do_convert_bulk()
-        ConvertMain.check_wrong_dir_structure()
-    PostConversion.execute_post_conversion()
+    ConvertUtils.execute_slsb_parsers()
+    ConvertMain.do_convert_bulk()
+    ConvertMain.check_wrong_dir_structure()
+    PostConversion.reattempt_behaviour_gen()
     end_time = time.time()
     elapsed = end_time - start_time
     Arguments.debug(f'\n<<<<<<<<<<<<<<< COMPLETED SUCCESSFULLY (in {elapsed:.4f}s) >>>>>>>>>>>>>>>')
