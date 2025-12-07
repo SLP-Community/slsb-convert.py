@@ -1,4 +1,4 @@
-# Script Version: 0.9g (to be used with SLSB v1.5.3)
+# Script Version: 1.0 (to be used with SLSB v2.0.0+)
 from typing import ClassVar, Iterable
 from datetime import datetime
 from pprint import pprint
@@ -507,8 +507,8 @@ class SLATE:
                 elif i == 4:
                     pos_ind = 'e'
                 rimtags_found:list[str] = SLATE.check_hentairim_tags(tags, stage_num, pos_ind)
-                TagUtils.bulk_add(tmp_stage_pos['extra']['custom'], rimtags_found)      # rim_pos_tags (position specific tags)
-                TagUtils.bulk_add(rimtags, rimtags_found)                               # appends unique rimtags_found to rimtags
+                TagUtils.bulk_add(tmp_stage_pos['tags'], rimtags_found)     # rim_pos_tags (position specific tags)
+                TagUtils.bulk_add(rimtags, rimtags_found)                   # appends unique rimtags_found to rimtags
             if rimtags:
                 SLATE.implement_hentairim_tags(tags, rimtags)
             asltags:list[str] = SLATE.check_asl_tags(tags, stage_num)
@@ -878,22 +878,22 @@ class ActorUtils:
             female_count:int = StoredData.pos_counts['female']
             
             if straight and female_count == 1 and 'femdom' not in tags and scene_pos['sex']['female']:
-                scene_pos['extra']['submissive'] = True
+                scene_pos['submissive'] = True
             if straight and female_count == 2 and 'femdom' not in tags: #needs_testing
                 if scene_pos['sex']['female']:
-                    scene_pos['extra']['submissive'] = True
+                    scene_pos['submissive'] = True
             if straight and ('femdom' in tags or 'ffffm' in tags) and scene_pos['sex']['male']:
-                scene_pos['extra']['submissive'] = True
+                scene_pos['submissive'] = True
             if gay and ((male_count == 2 and pos_num == 0) or ('hcos' in tags and scene_pos['race'] in {'Rabbit', 'Skeever', 'Horse'})): # needs_testing
-                scene_pos['extra']['submissive'] = True
+                scene_pos['submissive'] = True
             if lesbian and pos_num == 0: # needs_testing
-                scene_pos['extra']['submissive'] = True
+                scene_pos['submissive'] = True
 
-            if TagUtils.if_any_found(sub_tags, ['unconscious', 'gore', 'amputee']) and scene_pos['extra']['submissive']:
-                scene_pos['extra']['submissive'] = False
-                scene_pos['extra']['dead'] = True
-            #if 'billyy' in tags and 'cf' in tags and scene_pos['extra']['submissive']:
-            #   scene_pos['extra']['submissive'] = False
+            if TagUtils.if_any_found(sub_tags, ['unconscious', 'gore', 'amputee']) and scene_pos['submissive']:
+                scene_pos['submissive'] = False
+                scene_pos['dead'] = True
+            #if 'billyy' in tags and 'cf' in tags and scene_pos['submissive']:
+            #   scene_pos['submissive'] = False
 
     @staticmethod
     def process_pos_flag_futa_2(tags:list[str], scene_pos:dict[str,any], pos_num:int, actor_key:str):
@@ -931,9 +931,9 @@ class ActorUtils:
         if 'vampire' not in tags:
             return
         if TagUtils.if_any_found(tags, ['vampirefemale','vampirelesbian', 'femdom', 'cowgirl', 'vampfeedf'], event_name) and scene_pos['sex']['female']:
-            scene_pos['extra']['vampire'] = True
+            scene_pos['vampire'] = True
         elif scene_pos['sex']['male']:
-            scene_pos['extra']['vampire'] = True
+            scene_pos['vampire'] = True
 
     @staticmethod
     def process_pos_scaling(name:str, tags:list[str], scene_pos:dict[str,any]):
@@ -999,9 +999,9 @@ class ParamUtils:
         def process_pos_sos():
             if 'sos' in params_data and params_data['sos'] != 0:
                 # for sos value integration
-                has_sos_value = event_key
-                if (event_key in has_sos_value) and (stage_num == int(event_key[4:])) and (pos_num == int(actor_key[1:]) - 1):
-                   stage_pos['schlong'] = params_data['sos']
+                #has_sos_value = event_key
+                #if (event_key in has_sos_value) and (stage_num == int(event_key[4:])) and (pos_num == int(actor_key[1:]) - 1):
+                #   stage_pos['schlong'] = params_data['sos']
                 # for futa
                 if StoredData.tmp_params['has_schlong'] and actor_key[1:] not in StoredData.tmp_params['has_schlong']:
                     StoredData.tmp_params['has_schlong'] += f",{actor_key[1:]}"
@@ -1163,7 +1163,7 @@ class StageProcessor:
         name:str = scene['name']
         tags:list[str] = [tag.lower().strip() for tag in stage['tags']]
         furniture:dict[str,any] = scene['furniture']
-        scene_positions:list[dict] = stage['positions']     # pre-1.0
+        scene_positions:list[dict] = scene['positions']
         stage_positions:list[dict] = stage['positions']
 
         SLATE.insert_slate_tags(tags, name)
