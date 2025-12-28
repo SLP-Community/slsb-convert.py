@@ -1207,7 +1207,10 @@ class StageProcessor:
         if anim_dir_name == 'ZaZAnimsSLSB' or anim_dir_name == 'DDSL': #or anim_dir_name == 'EstrusSLSB'
             scene['private'] = True
 
-        scene['tags'] = scene_tags
+        #scene['tags'] = scene_tags
+        for i in range(len(stages)):
+            stage = stages[i]
+            stage['tags'] = scene_tags + stage['tags']
         #-----------------
 
     @staticmethod
