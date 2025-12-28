@@ -417,7 +417,6 @@ class SLATE:
 
     @staticmethod
     def implement_asl_tags(scene_tags:list[str], stage_tags:list[str], asltags:list[str]):
-        TagUtils.bulk_add(scene_tags, ['asltagged'])
         # stores info on vaginal/anal tag presence (for spitroast)
         TagUtils.if_then_add(scene_tags,'','', 'anal', 'vaginal', 'sranaltmp')
         TagUtils.if_then_add(scene_tags,'','', 'vaginal', 'anal', 'srvagtmp')
@@ -463,6 +462,21 @@ class SLATE:
                 TagUtils.bulk_add(stage_tags, static_tag)
 
     @staticmethod
+    def implement_position_tags(pos_tags:list[str]):
+        TagUtils.if_then_add_simple(pos_tags, 'ldi', 'LeadIn')
+        TagUtils.if_then_add_simple(pos_tags, 'kis', 'bKissing')
+        TagUtils.if_then_add_simple(pos_tags, ['sst', 'fst', 'bst'], 'pStimulation')
+        TagUtils.if_then_add_simple(pos_tags, ['shj', 'fhj'], 'pHandJob')
+        TagUtils.if_then_add_simple(pos_tags, ['sfj', 'ffj'], 'pFootJob')
+        TagUtils.if_then_add_simple(pos_tags, ['stf', 'ftf'], 'pBoobJob')
+        TagUtils.if_then_add_simple(pos_tags, ['cun', 'sbj', 'fbj'], 'aOral')
+        TagUtils.if_then_add_simple(pos_tags, ['smf', 'fmf'], 'pOral')
+        TagUtils.if_then_add_simple(pos_tags, ['sdv', 'fdv'], 'aVaginal')
+        TagUtils.if_then_add_simple(pos_tags, ['svp', 'fvp', 'scg', 'fcg', 'sdp', 'fdp'], 'pVaginal')
+        TagUtils.if_then_add_simple(pos_tags, ['sda', 'fda'], 'aAnal')
+        TagUtils.if_then_add_simple(pos_tags, ['sap', 'fap', 'sac', 'fac', 'sdp', 'fdp'], 'pAnal')
+
+    @staticmethod
     def implement_slate_tags(scene_tags:list[str], stage_tags:list[str], stage_num:int, stage_positions:list[dict]):
         if StoredData.cached_variables["action_logs_found"]:
             rimtags:list[str] = []
@@ -478,9 +492,12 @@ class SLATE:
                     pos_ind = 'd'
                 elif i == 4:
                     pos_ind = 'e'
-                rimtags_found:list[str] = SLATE.check_hentairim_tags(scene_tags, stage_tags, stage_num, pos_ind)
-                TagUtils.bulk_add(tmp_stage_pos['tags'], rimtags_found)     # rim_pos_tags (position specific tags)
-                TagUtils.bulk_add(rimtags, rimtags_found)                   # appends unique rimtags_found to rimtags
+                stage_pos_rimtags:list[str] = SLATE.check_hentairim_tags(scene_tags, stage_tags, stage_num, pos_ind)
+                if stage_pos_rimtags:
+                    TagUtils.bulk_add(rimtags, stage_pos_rimtags)
+                    # rim_pos_tags (position specific tags)
+                    TagUtils.bulk_add(tmp_stage_pos['tags'], stage_pos_rimtags)  
+                    SLATE.implement_position_tags(tmp_stage_pos['tags'])
             if rimtags:
                 SLATE.implement_hentairim_tags(scene_tags, stage_tags, rimtags)
             asltags:list[str] = SLATE.check_asl_tags(scene_tags, stage_tags, stage_num)
@@ -1130,7 +1147,7 @@ class StageUtils:
         # - - - - - - - - - - - - -
 
 #############################################################################################
-class StageProcessor:
+class PackageProcessor:
 
     @staticmethod
     def process_stage(scene_name, scene_tags, stage, stage_num, out_dir):
@@ -1176,7 +1193,7 @@ class StageProcessor:
         for i in range(len(stages)):
             stage = stages[i]
             stage_num = i + 1
-            StageProcessor.process_stage(scene_name, scene_tags, stage, stage_num, out_dir)
+            PackageProcessor.process_stage(scene_name, scene_tags, stage, stage_num, out_dir)
             if not anim_obj_found:
                 anim_obj_found = any(tmp_stage_pos['anim_obj'] != '' and 'cum' not in tmp_stage_pos['anim_obj'].lower() for tmp_stage_pos in stage['positions'])
 
@@ -1251,7 +1268,7 @@ class StageProcessor:
                             scene['id'] = scenes_old[item]['scene_hash']
                     new_scenes[scene['id']] = scene
 
-                    StageProcessor.process_scene(scene, anim_dir_name, out_dir)
+                    PackageProcessor.process_scene(scene, anim_dir_name, out_dir)
 
                 data['scenes'] = new_scenes
 
@@ -1410,7 +1427,7 @@ class ConvertMain:
                 output = subprocess.Popen(f"{Arguments.slsb_path} convert --in \"{path}\" --out \"{Arguments.temp_dir}\"", stdout=subprocess.PIPE).stdout.read()
 
         Arguments.debug("---------> EDITING OUTPUT SLSB PROJECTS")
-        StageProcessor.edit_slsb_json(out_dir)
+        PackageProcessor.edit_slsb_json(out_dir)
         # Building SLRs for edited SLSB Project
         for filename in os.listdir(Arguments.temp_dir):
             path = os.path.join(Arguments.temp_dir, filename)
