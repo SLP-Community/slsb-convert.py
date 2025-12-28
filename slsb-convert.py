@@ -301,7 +301,7 @@ class TagsRepairer:
 class SLATE:
 
     @staticmethod
-    def insert_slate_tags(tags:list[str]|str, name:str) -> None:
+    def insert_slate_tags(scene_tags:list[str]|str, name:str):
         if StoredData.cached_variables["action_logs_found"]:
             TagToAdd = ''
             TagToRemove = ''
@@ -309,15 +309,15 @@ class SLATE:
                 if name.lower() == entry['anim'].lower():
                     if entry['action'].lower() == 'addtag':
                         TagToAdd = entry['tag'].lower()
-                        if TagToAdd not in tags:
-                            tags.append(TagToAdd)
+                        if TagToAdd not in scene_tags:
+                            scene_tags.append(TagToAdd)
                     elif entry['action'].lower() == 'removetag':
                         TagToRemove = entry['tag'].lower()
-                        if TagToRemove in tags:
-                            tags.remove(TagToRemove)
+                        if TagToRemove in scene_tags:
+                            scene_tags.remove(TagToRemove)
 
     @staticmethod
-    def check_hentairim_tags(tags:list[str], stage_num:int, pos_ind:str) -> None:
+    def check_hentairim_tags(scene_tags:list[str], stage_tags:list[str], stage_num:int, pos_ind:str) -> None:
         rimtags = {
             'ldi': '{stage}{pos}ldi',  # lead_in
             'kis': '{stage}{pos}kis',  # kissing
@@ -356,57 +356,47 @@ class SLATE:
             'sfj': '{stage}{pos}sfj',  # slow_getting_footjob
             'ffj': '{stage}{pos}ffj'   # fast_getting_footjob    
         }
-        tags_set = set(tags)
+        tags_set = set(scene_tags)
         rimtags_found:list[str] = []
-        non_stage_tags = set()
         for entry, dynamic_tag in rimtags.items():
             static_tag = dynamic_tag.format(stage=stage_num, pos=pos_ind)
             if static_tag in tags_set:
                 rimtags_found.append(entry)
-            # ensure stage-specifiicity for rim-tags
-            for tag in tags:
-                if tag.endswith(pos_ind+entry):
-                    prefix = tag[:-len(pos_ind+entry)]
-                    if prefix.isdigit() and int(prefix) != stage_num:
-                        non_stage_tags.add(tag)
-        if non_stage_tags:
-            tags[:] = [tag for tag in tags if tag not in non_stage_tags]
+                # ensure stage-specifiicity for rim-tags
+                TagUtils.bulk_remove(scene_tags, static_tag)
+                TagUtils.bulk_add(stage_tags, static_tag)
         return rimtags_found
 
     @staticmethod
-    def implement_hentairim_tags(tags:list[str], rimtags:list[str]) -> None:
-        TagUtils.bulk_add(tags, ['rimtagged'])
+    def implement_hentairim_tags(scene_tags:list[str], stage_tags:list[str], rimtags:list[str]):
+        TagUtils.bulk_add(scene_tags, ['rimtagged'])
         # removes all stage tags that would be added by HentaiRim
-        if 'rimtagged' in tags and 'rim_ind' not in tags:
-            TagUtils.bulk_remove(tags, [Keywords.HENTAIRIM_TAGS, 'leadin'])
-            TagUtils.bulk_add(tags, ['rim_ind'])
+        TagUtils.bulk_remove(scene_tags, [Keywords.HENTAIRIM_TAGS, 'leadin'])
         # each stage tagged differently based on HentaiRim interactions
-        TagUtils.if_in_then_add(tags, rimtags, ['sst', 'fst', 'bst'], 'stimulation')
-        TagUtils.if_in_then_add(tags, rimtags, ['kis'], 'kissing')
-        TagUtils.if_in_then_add(tags, rimtags, ['shj', 'fhj'], 'handjob')
-        TagUtils.if_in_then_add(tags, rimtags, ['sfj', 'ffj'], 'footjob')
-        TagUtils.if_in_then_add(tags, rimtags, ['stf', 'ftf'], 'boobjob')
-        TagUtils.if_in_then_add(tags, rimtags, ['sbj', 'fbj', 'smf', 'fmf'], 'blowjob')
-        TagUtils.if_in_then_add(tags, rimtags, ['cun'], 'cunnilingus')
-        TagUtils.if_in_then_add(tags, rimtags, ['sbj', 'fbj', 'smf', 'fmf', 'cun'], 'oral')
-        TagUtils.if_in_then_add(tags, rimtags, ['scg', 'fcg', 'sac', 'fac'], 'cowgirl')
-        TagUtils.if_in_then_add(tags, rimtags, ['svp', 'fvp', 'sdv', 'fdv', 'scg', 'fcg', 'sdp', 'fdp'], 'vaginal')
-        TagUtils.if_in_then_add(tags, rimtags, ['sap', 'fap', 'sda', 'fda', 'sac', 'fac', 'sdp', 'fdp'], 'anal')
-        if 'blowjob' in tags:
-            TagUtils.if_then_add(tags,'','', 'vaginal', 'anal', 'spitroast')
-            TagUtils.if_then_add(tags,'','', 'anal', 'vaginal', 'spitroast')
-            TagUtils.if_then_add(tags,'','', ['vaginal', 'anal'], '', 'triplepenetration')
+        TagUtils.if_in_then_add(stage_tags, rimtags, ['sst', 'fst', 'bst'], 'stimulation')
+        TagUtils.if_in_then_add(stage_tags, rimtags, ['kis'], 'kissing')
+        TagUtils.if_in_then_add(stage_tags, rimtags, ['shj', 'fhj'], 'handjob')
+        TagUtils.if_in_then_add(stage_tags, rimtags, ['sfj', 'ffj'], 'footjob')
+        TagUtils.if_in_then_add(stage_tags, rimtags, ['stf', 'ftf'], 'boobjob')
+        TagUtils.if_in_then_add(stage_tags, rimtags, ['sbj', 'fbj', 'smf', 'fmf'], 'blowjob')
+        TagUtils.if_in_then_add(stage_tags, rimtags, ['cun'], 'cunnilingus')
+        TagUtils.if_in_then_add(stage_tags, rimtags, ['sbj', 'fbj', 'smf', 'fmf', 'cun'], 'oral')
+        TagUtils.if_in_then_add(stage_tags, rimtags, ['scg', 'fcg', 'sac', 'fac'], 'cowgirl')
+        TagUtils.if_in_then_add(stage_tags, rimtags, ['svp', 'fvp', 'sdv', 'fdv', 'scg', 'fcg', 'sdp', 'fdp'], 'vaginal')
+        TagUtils.if_in_then_add(stage_tags, rimtags, ['sap', 'fap', 'sda', 'fda', 'sac', 'fac', 'sdp', 'fdp'], 'anal')
+        if 'blowjob' in stage_tags:
+            TagUtils.if_then_add(stage_tags,'','', 'vaginal', 'anal', 'spitroast')
+            TagUtils.if_then_add(stage_tags,'','', 'anal', 'vaginal', 'spitroast')
+            TagUtils.if_then_add(stage_tags,'','', ['vaginal', 'anal'], '', 'triplepenetration')
         if 'sdp' in rimtags or 'fdp' in rimtags:
-            TagUtils.bulk_add(tags, 'doublepenetration')
-        TagUtils.if_in_then_add(tags, rimtags, ['fst','bst','fvp','fap','fcg','fac','fdp','fdv','fda','fhj','ftf','fmf','ffj','fbj'], 'rimfast')
-        TagUtils.if_in_then_add(tags, rimtags, ['sst','svp','sap','scg','sac','sdp','sdv','sda','shj','stf','smf','sfj','kis','cun','sbj'], 'rimslow')
-        if not TagUtils.if_any_found(tags, Keywords.HENTAIRIM_TAGS):
-            TagUtils.bulk_add(tags, 'leadin')
+            TagUtils.bulk_add(stage_tags, 'doublepenetration')
+        TagUtils.if_in_then_add(stage_tags, rimtags, ['fst','bst','fvp','fap','fcg','fac','fdp','fdv','fda','fhj','ftf','fmf','ffj','fbj'], 'rimfast')
+        TagUtils.if_in_then_add(stage_tags, rimtags, ['sst','svp','sap','scg','sac','sdp','sdv','sda','shj','stf','smf','sfj','kis','cun','sbj'], 'rimslow')
+        if not TagUtils.if_any_found(stage_tags, Keywords.HENTAIRIM_TAGS):
+            TagUtils.bulk_add(stage_tags, 'leadin')
 
     @staticmethod
-    def check_asl_tags(tags:list[str], stage_num:int) -> None:
-        #if f'{stage_num}en' in tags:
-        #    stage_num = stage_num - 1
+    def check_asl_tags(scene_tags:list[str], stage_tags:list[str], stage_num:int) -> None:
         asltags = {
             'en': '{stage}en',  # end_stage
             'li': '{stage}li',  # lead_in
@@ -422,53 +412,45 @@ class SLATE:
             'ba': '{stage}ba',  # ???
             'bv': '{stage}bv'   # ???
         }
-        tags_set = set(tags)
+        tags_set = set(scene_tags)
         asltags_found:list[str] = []
-        non_stage_tags = set()
         for entry, dynamic_tag in asltags.items():
             static_tag = dynamic_tag.format(stage=stage_num)
             if static_tag in tags_set:
                 asltags_found.append(entry)
-            # ensure stage-specifiicity for asl-tags
-            for tag in tags:
-                if tag.endswith(entry):
-                    prefix = tag[:-len(entry)]
-                    if prefix.isdigit() and int(prefix) != stage_num:
-                        non_stage_tags.add(tag)
-        if non_stage_tags:
-            tags[:] = [tag for tag in tags if tag not in non_stage_tags]
+                # ensure stage-specifiicity for asl-tags
+                TagUtils.bulk_remove(scene_tags, static_tag)
+                TagUtils.bulk_add(stage_tags, static_tag)
         return asltags_found
 
     @staticmethod
-    def implement_asl_tags(tags:list[str], asltags:list[str]) -> None:
-        TagUtils.bulk_add(tags, ['asltagged'])
-        if 'rimtagged' in tags:
-            TagUtils.bulk_remove(tags, 'rim_ind')
-            return
+    def implement_asl_tags(scene_tags:list[str], stage_tags:list[str], asltags:list[str]):
+        TagUtils.bulk_add(scene_tags, ['asltagged'])
         # stores info on vaginal/anal tag presence (for spitroast)
-        TagUtils.if_then_add(tags,'','', 'anal', 'vaginal', 'sranaltmp')
-        TagUtils.if_then_add(tags,'','', 'vaginal', 'anal', 'srvagtmp')
+        TagUtils.if_then_add(scene_tags,'','', 'anal', 'vaginal', 'sranaltmp')
+        TagUtils.if_then_add(scene_tags,'','', 'vaginal', 'anal', 'srvagtmp')
         # removes all scene tags that would be added by ASL
-        TagUtils.bulk_remove(tags, ['leadin', 'oral', 'vaginal', 'anal', 'spitroast', 'doublepenetration', 'triplepenetration'])
-        # each stage tagged differently based on ASL interactions
-        TagUtils.if_in_then_add(tags, asltags, ['li'], 'leadin')
-        TagUtils.if_in_then_add(tags, asltags, ['sb', 'fb'], 'oral')
-        TagUtils.if_in_then_add(tags, asltags, ['sv', 'fv'], 'vaginal')
-        TagUtils.if_in_then_add(tags, asltags, ['sa', 'fa'], 'anal')
-        if 'sr' in asltags:
-            TagUtils.bulk_add(tags, ['spitroast', 'oral'])
-            TagUtils.if_then_add_simple(tags, ['sranaltmp'], 'anal')
-            TagUtils.if_then_add_simple(tags, ['srvagtmp'], 'vaginal')
-        if 'dp' in asltags:
-            TagUtils.bulk_add(tags, ['doublepenetration', 'vaginal', 'anal'])
-        if 'tp' in asltags:
-            TagUtils.bulk_add(tags, ['triplepenetration', 'oral', 'vaginal', 'anal'])
-        TagUtils.if_in_then_add(tags, asltags, ['sb','sv','sa'], 'rimslow')
-        TagUtils.if_in_then_add(tags, asltags, ['fb','fv','fa'], 'rimfast')
-        TagUtils.bulk_remove(tags, ['sranaltmp', 'srvagtmp'])
+        TagUtils.bulk_remove(scene_tags, ['leadin', 'oral', 'vaginal', 'anal', 'spitroast', 'doublepenetration', 'triplepenetration'])
+        if not 'rimtagged' in scene_tags:
+            # each stage tagged differently based on ASL interactions
+            TagUtils.if_in_then_add(stage_tags, asltags, ['li'], 'leadin')
+            TagUtils.if_in_then_add(stage_tags, asltags, ['sb', 'fb'], 'oral')
+            TagUtils.if_in_then_add(stage_tags, asltags, ['sv', 'fv'], 'vaginal')
+            TagUtils.if_in_then_add(stage_tags, asltags, ['sa', 'fa'], 'anal')
+            if 'sr' in asltags:
+                TagUtils.bulk_add(stage_tags, ['spitroast', 'oral'])
+                TagUtils.if_in_then_add(stage_tags, scene_tags, ['sranaltmp'], 'anal')
+                TagUtils.if_in_then_add(stage_tags, scene_tags, ['srvagtmp'], 'vaginal')
+            if 'dp' in asltags:
+                TagUtils.bulk_add(stage_tags, ['doublepenetration', 'vaginal', 'anal'])
+            if 'tp' in asltags:
+                TagUtils.bulk_add(stage_tags, ['triplepenetration', 'oral', 'vaginal', 'anal'])
+            TagUtils.if_in_then_add(stage_tags, asltags, ['sb','sv','sa'], 'rimslow')
+            TagUtils.if_in_then_add(stage_tags, asltags, ['fb','fv','fa'], 'rimfast')
+        TagUtils.bulk_remove(scene_tags, ['sranaltmp', 'srvagtmp'])
 
     @staticmethod
-    def correct_aslsfx_tags(tags:list[str], stage_num:int) -> None:
+    def correct_aslsfx_tags(scene_tags:list[str], stage_tags:list[str],  stage_num:int):
         aslsfx_tags = {
             'na': '{stage}na',  # no_sound
             'ks': '{stage}ks',  # kissing
@@ -480,18 +462,16 @@ class SLATE:
             'mc': '{stage}mc',  # medium_clapping (1/0.45s)
             'fc': '{stage}fc'   # fast_clapping (1/0.30s)
         }
-        non_stage_tags = set()
-        for entry, e in aslsfx_tags.items():
-            for tag in tags:
-                if tag.endswith(entry):
-                    prefix = tag[:-len(entry)]
-                    if prefix.isdigit() and int(prefix) != stage_num:
-                        non_stage_tags.add(tag)
-        if non_stage_tags:
-            tags[:] = [tag for tag in tags if tag not in non_stage_tags]
+        tags_set = set(scene_tags)
+        for entry, dynamic_tag in aslsfx_tags.items():
+            static_tag = dynamic_tag.format(stage=stage_num)
+            if static_tag in tags_set:
+                # ensure stage-specifiicity for asl-sfx-tags
+                TagUtils.bulk_remove(scene_tags, static_tag)
+                TagUtils.bulk_add(stage_tags, static_tag)
 
     @staticmethod
-    def implement_slate_tags(tags:list[str], stage_num:int, stage_positions:list[dict]) -> None:
+    def implement_slate_tags(scene_tags:list[str], stage_tags:list[str], stage_num:int, stage_positions:list[dict]):
         if StoredData.cached_variables["action_logs_found"]:
             rimtags:list[str] = []
             for i, tmp_stage_pos in enumerate(stage_positions):
@@ -506,15 +486,15 @@ class SLATE:
                     pos_ind = 'd'
                 elif i == 4:
                     pos_ind = 'e'
-                rimtags_found:list[str] = SLATE.check_hentairim_tags(tags, stage_num, pos_ind)
+                rimtags_found:list[str] = SLATE.check_hentairim_tags(scene_tags, stage_tags, stage_num, pos_ind)
                 TagUtils.bulk_add(tmp_stage_pos['tags'], rimtags_found)     # rim_pos_tags (position specific tags)
                 TagUtils.bulk_add(rimtags, rimtags_found)                   # appends unique rimtags_found to rimtags
             if rimtags:
-                SLATE.implement_hentairim_tags(tags, rimtags)
-            asltags:list[str] = SLATE.check_asl_tags(tags, stage_num)
+                SLATE.implement_hentairim_tags(scene_tags, stage_tags, rimtags)
+            asltags:list[str] = SLATE.check_asl_tags(scene_tags, stage_tags, stage_num)
             if asltags:
-               SLATE.implement_asl_tags(tags, asltags)
-            SLATE.correct_aslsfx_tags(tags, stage_num)
+                SLATE.implement_asl_tags(scene_tags, stage_tags, asltags)
+            SLATE.correct_aslsfx_tags(scene_tags, stage_tags, stage_num)
 
 #############################################################################################
 class Parsers:
