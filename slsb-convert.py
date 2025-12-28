@@ -1210,6 +1210,61 @@ class StageProcessor:
         #-----------------
 
     @staticmethod
+    def process_scene(scene, anim_dir_name, out_dir):
+        scene_name:str = scene['name']
+        stages:list[dict] = scene['stages']
+        scene_positions:list[dict] = scene['positions']
+        furniture:dict[str,any] = scene['furniture']
+
+        first_event_name:str|None = None
+        fist_event:str = stages[0]['positions'][0]['event']
+        if fist_event and len(fist_event) > 0:
+            first_event_name = fist_event[0].lower()
+
+        scene_tags:list[str] = [slal_tag.lower().strip() for slal_tag in stages[0]['tags']]
+        SLATE.insert_slate_tags(scene_tags, scene_name)
+        TagsRepairer.update_scene_tags(scene_name, scene_tags, anim_dir_name)
+        TagsRepairer.fix_leadin_tag(scene_tags)
+
+        anim_obj_found:bool = False
+        for i in range(len(stages)):
+            stage = stages[i]
+            stage_num = i + 1
+            StageProcessor.process_stage(scene_name, scene_tags, stage, stage_num, out_dir)
+            if not anim_obj_found:
+                anim_obj_found = any(tmp_stage_pos['anim_obj'] != '' and 'cum' not in tmp_stage_pos['anim_obj'].lower() for tmp_stage_pos in stage['positions'])
+
+        StageUtils.update_pos_counts(scene_positions)
+        has_cre_vamplord:bool = any(tmp_scene_pos['race']=="Vampire Lord" for tmp_scene_pos in scene_positions)
+        is_sub_scene:bool = False
+        sub_tags:list[str] = TagsRepairer.fix_submissive_tags(scene_tags, scene_name, anim_dir_name)
+        if sub_tags:
+            is_sub_scene = True
+        
+        pos_length:int = len(scene_positions)
+        for i in range(pos_length):
+            scene_pos:dict[str,any] = scene_positions[i]
+            pos_num:int = i
+            ActorUtils.relax_creature_gender(scene_pos)
+            TagsRepairer.fix_vampire_tags(scene_name, scene_tags, first_event_name, has_cre_vamplord)
+            ActorUtils.process_pos_flag_futa_1(scene_tags, scene_pos, pos_length, pos_num, first_event_name)
+            ActorUtils.process_pos_flag_sub(scene_tags, scene_pos, pos_num, sub_tags, is_sub_scene)
+            ParamUtils.incorporate_slal_json_data(scene_name, scene_tags, scene_pos, [], 0, pos_num, 'Scene')
+            ActorUtils.process_pos_flag_vampire(scene_tags, scene_pos, first_event_name)
+            ActorUtils.process_pos_flag_futa_3(scene_tags, scene_pos, pos_length, pos_num)
+            ActorUtils.process_pos_scaling(scene_name, scene_tags, scene_pos)
+
+        TagsRepairer.fix_toys_tag(scene_tags, anim_obj_found)
+        StageUtils.process_scene_furniture(scene_name, scene_tags, furniture, pos_length, anim_obj_found)
+
+        # marks scenes as private (for manual conversion)
+        if anim_dir_name == 'ZaZAnimsSLSB' or anim_dir_name == 'DDSL': #or anim_dir_name == 'EstrusSLSB'
+            scene['private'] = True
+
+        scene['tags'] = scene_tags
+        #-----------------
+
+    @staticmethod
     def edit_slsb_json(out_dir):
         for filename in os.listdir(Arguments.temp_dir):
             path = os.path.join(Arguments.temp_dir, filename)
@@ -1242,23 +1297,12 @@ class StageProcessor:
                 sorted_scene_items = sorted(scenes.items(), key=lambda item: item[1].get('name', ''))
 
                 for id, scene, in sorted_scene_items:
-                    scene_old = {}
                     for item in scenes_old:
                         if scene['name'] == scenes_old[item]['scene_name']:
-                            scene_old = scenes_old[item]
-                            scene['id'] = scene_old['scene_hash']
+                            scene['id'] = scenes_old[item]['scene_hash']
                     new_scenes[scene['id']] = scene
 
-                    stages = scene['stages']
-                    stages_count:int = len(stages)
-                    for i in range(stages_count):
-                        stage = stages[i]
-                        stage_num = i + 1
-                        StageProcessor.process_stage(scene, stage, stages_count, stage_num, anim_dir_name, out_dir)
-
-                    # marks scenes as private (for manual conversion)
-                    if anim_dir_name == 'ZaZAnimsSLSB' or anim_dir_name == 'DDSL': #or anim_dir_name == 'EstrusSLSB'
-                        scene['private'] = True
+                    StageProcessor.process_scene(scene, anim_dir_name, out_dir)
 
                 data['scenes'] = new_scenes
 
