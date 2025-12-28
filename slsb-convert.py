@@ -1243,14 +1243,10 @@ class StageProcessor:
 
                 for id, scene, in sorted_scene_items:
                     scene_old = {}
-                    stages_old = {}
                     for item in scenes_old:
                         if scene['name'] == scenes_old[item]['scene_name']:
                             scene_old = scenes_old[item]
                             scene['id'] = scene_old['scene_hash']
-                            scene['root'] = scene_old['scene_root']
-                            scene['graph'] = scene_old['scene_graph']
-                            stages_old = scene_old['scene_stages']
                     new_scenes[scene['id']] = scene
 
                     stages = scene['stages']
@@ -1259,14 +1255,6 @@ class StageProcessor:
                         stage = stages[i]
                         stage_num = i + 1
                         StageProcessor.process_stage(scene, stage, stages_count, stage_num, anim_dir_name, out_dir)
-
-                        if stages_old != {}:
-                            try:
-                                stage_old = stages_old[i]
-                                stage['id'] = stage_old['stage_hash']
-                            except:
-                                #print(scene['name']) #for debugging on error
-                                pass
 
                     # marks scenes as private (for manual conversion)
                     if anim_dir_name == 'ZaZAnimsSLSB' or anim_dir_name == 'DDSL': #or anim_dir_name == 'EstrusSLSB'
