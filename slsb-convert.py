@@ -181,47 +181,47 @@ class TagUtils:
 class TagsRepairer:
 
     @staticmethod
-    def update_stage_tags(name:str, tags:list[str], anim_dir_name:str) -> None:
-        n = name.lower()
+    def update_scene_tags(scene_name:str, scene_tags:list[str], anim_dir_name:str) -> None:
+        n = scene_name.lower()
         d = anim_dir_name.lower()
+        t = scene_tags
         # tags corrections
-        TagUtils.if_then_add(tags,'','', ['laying'], ['eggs', 'egg'], 'lying')
-        TagUtils.if_then_remove(tags, ['laying', 'lying'], ['eggs', 'egg'], 'laying')
-        TagUtils.if_then_replace(tags, 'invfurn', 'invisfurn')
-        TagUtils.if_then_replace(tags, 'invisible obj', 'invisfurn')
-        TagUtils.if_then_replace(tags, 'cunnilingius', 'cunnilingus')
-        TagUtils.if_then_replace(tags, 'agressive', 'aggressive')
-        TagUtils.if_then_replace(tags, 'femodm', 'femdom')
+        TagUtils.if_then_add(t,'','', ['laying'], ['eggs', 'egg'], 'lying')
+        TagUtils.if_then_remove(t, ['laying', 'lying'], ['eggs', 'egg'], 'laying')
+        TagUtils.if_then_replace(t, 'invfurn', 'invisfurn')
+        TagUtils.if_then_replace(t, 'invisible obj', 'invisfurn')
+        TagUtils.if_then_replace(t, 'cunnilingius', 'cunnilingus')
+        TagUtils.if_then_replace(t, 'agressive', 'aggressive')
+        TagUtils.if_then_replace(t, 'femodm', 'femdom')
         # furniutre tags
-        TagUtils.if_then_add(tags,n,d, ['inv'], '', 'invisfurn')
-        TagUtils.if_then_add(tags,n,d, Keywords.FURNITURE, '', 'furniture')
-        TagUtils.if_then_remove(tags, ['invisfurn', 'furniture'], '', 'furniture')
+        TagUtils.if_then_add(t,n,d, ['inv'], '', 'invisfurn')
+        TagUtils.if_then_add(t,n,d, Keywords.FURNITURE, '', 'furniture')
+        TagUtils.if_then_remove(t, ['invisfurn', 'furniture'], '', 'furniture')
         # unofficial standardization
-        TagUtils.if_then_add(tags,n,d, ['femdom', 'amazon', 'cowgirl', 'femaledomination', 'female domination', 'leito xcross standing'], '', 'femdom')
-        TagUtils.if_then_add(tags,n,d, ['basescale', 'base scale', 'setscale', 'set scale', 'bigguy'], '', 'scaling')
-        TagUtils.if_then_add(tags,n,d, Keywords.FUTA, '', 'futa')
-        TagUtils.bulk_remove(tags, ['vampire', 'vampirelord']) # will be added later after special checks
+        TagUtils.if_then_add(t,n,d, ['femdom', 'amazon', 'cowgirl', 'femaledomination', 'female domination', 'leito xcross standing'], '', 'femdom')
+        TagUtils.if_then_add(t,n,d, ['basescale', 'base scale', 'setscale', 'set scale', 'bigguy'], '', 'scaling')
+        TagUtils.if_then_add(t,n,d, Keywords.FUTA, '', 'futa')
+        TagUtils.bulk_remove(t, ['vampire', 'vampirelord']) # will be added later after special checks
         # official standard tags
-        TagUtils.if_then_add(tags,n,d, ['mage', 'staff', 'alteration', 'rune', 'magicdildo', 'magick'], '', 'magic')
-        TagUtils.if_then_add(tags,n,d, ['dp', 'doublepen'], '', 'doublepenetration')
-        TagUtils.if_then_add(tags,n,d, ['tp', 'triplepen'], '', 'triplepenetration')
-        TagUtils.if_then_add(tags,n,d, ['guro', 'execution'], '', 'gore')
-        TagUtils.if_then_add(tags,n,d, ['choke', 'choking'], '', 'asphyxiation')
-        TagUtils.if_then_add(tags,n,d, ['titfuck', 'tittyfuck'], '', 'boobjob')
-        TagUtils.if_then_add(tags,n,d, ['trib', 'tribbing'], '', 'tribadism')
-        TagUtils.if_then_add(tags,n,d, ['doggystyle', 'doggy'], '', 'doggy')
-        TagUtils.if_then_add(tags,n,d, ['facesit'], '', 'facesitting')
-        TagUtils.if_then_add(tags,n,d, ['lotus'], '', 'lotusposition')
-        TagUtils.if_then_add(tags,n,d, ['spank'], '', 'spanking')
-        TagUtils.if_then_add(tags,n,d, ['rimjob'], '', 'rimming')
-        TagUtils.if_then_add(tags,n,d, ['kiss'], '', 'kissing')
-        TagUtils.if_then_add(tags,n,d, ['hold'], '', 'holding')
-        TagUtils.if_then_add(tags,n,d, ['69'], '', 'sixtynine')
-        if '' in tags:
-            tags.remove('')
+        TagUtils.if_then_add(t,n,d, ['mage', 'staff', 'alteration', 'rune', 'magicdildo', 'magick'], '', 'magic')
+        TagUtils.if_then_add(t,n,d, ['dp', 'doublepen'], '', 'doublepenetration')
+        TagUtils.if_then_add(t,n,d, ['tp', 'triplepen'], '', 'triplepenetration')
+        TagUtils.if_then_add(t,n,d, ['guro', 'execution'], '', 'gore')
+        TagUtils.if_then_add(t,n,d, ['choke', 'choking'], '', 'asphyxiation')
+        TagUtils.if_then_add(t,n,d, ['titfuck', 'tittyfuck'], '', 'boobjob')
+        TagUtils.if_then_add(t,n,d, ['trib', 'tribbing'], '', 'tribadism')
+        TagUtils.if_then_add(t,n,d, ['doggystyle', 'doggy'], '', 'doggy')
+        TagUtils.if_then_add(t,n,d, ['facesit'], '', 'facesitting')
+        TagUtils.if_then_add(t,n,d, ['lotus'], '', 'lotusposition')
+        TagUtils.if_then_add(t,n,d, ['spank'], '', 'spanking')
+        TagUtils.if_then_add(t,n,d, ['rimjob'], '', 'rimming')
+        TagUtils.if_then_add(t,n,d, ['kiss'], '', 'kissing')
+        TagUtils.if_then_add(t,n,d, ['hold'], '', 'holding')
+        TagUtils.if_then_add(t,n,d, ['69'], '', 'sixtynine')
+        TagUtils.bulk_remove(t, '')
 
     @staticmethod
-    def fix_submissive_tags(tags:list[str], scene_name:str, anim_dir_name:str) -> None:
+    def fix_submissive_tags(scene_name:str, scene_tags:list[str], anim_dir_name:str) -> None:
         sub_tags:dict[str,bool] = {
             'unconscious': False,   # necro stuff
             'gore': False,          # something gets chopped off
@@ -236,77 +236,69 @@ class TagsRepairer:
         s = scene_name.lower()
         d = anim_dir_name.lower()
         # disibuting submissive flags for scenes (not flags for actors)
-        if TagUtils.if_any_found(tags, Keywords.UNCONSCIOUS, s,d):
+        if TagUtils.if_any_found(scene_tags, Keywords.UNCONSCIOUS, s,d):
             sub_tags['unconscious'] = True
-        if TagUtils.if_any_found(tags, ['guro', 'gore'], s,d): 
+        if TagUtils.if_any_found(scene_tags, ['guro', 'gore'], s,d): 
             sub_tags['gore'] = True
-        if TagUtils.if_any_found(tags, ['amputee'], s,d): 
+        if TagUtils.if_any_found(scene_tags, ['amputee'], s,d): 
             sub_tags['amputee'] = True
-        if TagUtils.if_any_found(tags, ['nya', 'molag', 'psycheslavepunishment'], s,d): 
+        if TagUtils.if_any_found(scene_tags, ['nya', 'molag', 'psycheslavepunishment'], s,d): 
             sub_tags['ryona'] = True
-        if TagUtils.if_any_found(tags, ['humiliation', 'punishment'], s,d): 
+        if TagUtils.if_any_found(scene_tags, ['humiliation', 'punishment'], s,d): 
             sub_tags['humiliation'] = True
-        if TagUtils.if_any_found(tags, ['asphyxiation'], s,d): 
+        if TagUtils.if_any_found(scene_tags, ['asphyxiation'], s,d): 
             sub_tags['asphyxiation'] = True
-        if TagUtils.if_any_found(tags, ['spanking'], s,d): 
+        if TagUtils.if_any_found(scene_tags, ['spanking'], s,d): 
             sub_tags['spanking'] = True
-        if TagUtils.if_any_found(tags, Keywords.DOMINANT, s,d):
+        if TagUtils.if_any_found(scene_tags, Keywords.DOMINANT, s,d):
             sub_tags['dominant'] = True
         # extensive treatment of forced scenes
-        if TagUtils.if_any_found(tags, Keywords.FORCED, s,d):
+        if TagUtils.if_any_found(scene_tags, Keywords.FORCED, s,d):
             sub_tags['forced'] = True
-        if 'aggressive' in tags:
-            if TagUtils.if_any_found(tags, Keywords.USES_ONLY_AGG_TAG, s,d):
+        if 'aggressive' in scene_tags:
+            if TagUtils.if_any_found(scene_tags, Keywords.USES_ONLY_AGG_TAG, s,d):
                 sub_tags['forced'] = True
         # adjust stage tags based on sub_flags
         subtags_found:list[str] = []
         for sub_tag, flag_value in sub_tags.items():
             if flag_value:
                 subtags_found.append(sub_tag)
-                if sub_tag not in tags:
-                    tags.append(sub_tag)
-            elif not flag_value and sub_tag in tags:
-                tags.remove(sub_tag)
+                if sub_tag not in scene_tags:
+                    scene_tags.append(sub_tag)
+            elif not flag_value and sub_tag in scene_tags:
+                scene_tags.remove(sub_tag)
         return subtags_found
 
     @staticmethod
-    def insert_legacy_stage_counts(tags:list[str], stages_count:int, stage_num:int):
-        legacy_stage_count_tag:str = 'stg_cnt_' + str(stages_count)
-        legacy_stage_num_tag:str = 'stg_num_' + str(stage_num)
-        TagUtils.bulk_add(tags, legacy_stage_num_tag)
-        if stage_num == stages_count: # that is, is_end_stage:bool==True
-            TagUtils.bulk_add(tags, legacy_stage_count_tag)
+    def fix_leadin_tag(scene_tags:list[str]):
+        TagUtils.if_then_remove(scene_tags, ['leadin'], '', 'leadin')
+        if any(kwd in scene_tags for kwd in Keywords.LEADIN) and all(kwd not in scene_tags for kwd in Keywords.NOT_LEADIN):
+            TagUtils.bulk_add(scene_tags, 'leadin')
 
     @staticmethod
-    def fix_leadin_tag(tags):
-        TagUtils.if_then_remove(tags, ['leadin'], ['asltagged'], 'leadin')
-        if any(kwd in tags for kwd in Keywords.LEADIN) and all(kwd not in tags for kwd in Keywords.NOT_LEADIN):
-            TagUtils.bulk_add(tags, 'leadin')
-
-    @staticmethod
-    def fix_vampire_tags(name, tags, event_name, has_cre_vamplord):
+    def fix_vampire_tags(scene_name:str, scene_tags:list[str], event_name:str, has_cre_vamplord:bool):
         if has_cre_vamplord:
-            TagUtils.bulk_add(tags, 'vampirelord')
-        elif 'vamp' in event_name or 'vamp' in name.lower():
-            TagUtils.bulk_add(tags, 'vampire')
+            TagUtils.bulk_add(scene_tags, 'vampirelord')
+        elif 'vamp' in event_name or 'vamp' in scene_name.lower():
+            TagUtils.bulk_add(scene_tags, 'vampire')
 
     @staticmethod
-    def fix_toys_tag(tags, anim_obj_found):
+    def fix_toys_tag(scene_tags:list[str], anim_obj_found:bool):
         if not anim_obj_found:
-            TagUtils.bulk_remove(tags, 'toys')
+            TagUtils.bulk_remove(scene_tags, 'toys')
         else:
-            TagUtils.bulk_add(tags, 'toys')
+            TagUtils.bulk_add(scene_tags, 'toys')
 
 #############################################################################################
 class SLATE:
 
     @staticmethod
-    def insert_slate_tags(scene_tags:list[str]|str, name:str):
+    def insert_slate_tags(scene_name:str, scene_tags:list[str]|str, ):
         if StoredData.cached_variables["action_logs_found"]:
             TagToAdd = ''
             TagToRemove = ''
             for entry in StoredData.slate_logs_data:
-                if name.lower() == entry['anim'].lower():
+                if scene_name.lower() == entry['anim'].lower():
                     if entry['action'].lower() == 'addtag':
                         TagToAdd = entry['tag'].lower()
                         if TagToAdd not in scene_tags:
@@ -828,9 +820,9 @@ class Editors:
 class ActorUtils:
 
     @staticmethod
-    def process_pos_flag_futa_1(tags:list[str], scene_pos:dict[str,any], pos_length:int, pos_num:int, event_name:str):
+    def process_pos_flag_futa_1(scene_tags:list[str], scene_pos:dict[str,any], pos_length:int, pos_num:int, event_name:str):
         # initial preparations
-        if 'futa' not in tags:
+        if 'futa' not in scene_tags:
             return
         if 'kom_futaduo' in event_name:
             scene_pos['sex']['female'] = False
@@ -842,13 +834,13 @@ class ActorUtils:
             if pos_num == 1:
                 scene_pos['sex']['male'] = False
                 scene_pos['sex']['female'] = True
-        if 'gs' in tags and 'mf' in tags and pos_length == 2:
+        if 'gs' in scene_tags and 'mf' in scene_tags and pos_length == 2:
             if not scene_pos['sex']['male'] and pos_num == 1:
                 scene_pos['sex']['female'] = False
                 scene_pos['sex']['futa'] = True
 
     @staticmethod
-    def process_pos_flag_sub(tags:list[str], scene_pos:dict[str,any], pos_num:int, sub_tags:list[str], is_sub_scene:bool):
+    def process_pos_flag_sub(scene_tags:list[str], scene_pos:dict[str,any], pos_num:int, sub_tags:list[str], is_sub_scene:bool):
         # IMP: Deal with sub/dead flags before futa flags
         if is_sub_scene:
             straight:bool = StoredData.pos_counts['straight']
@@ -857,14 +849,14 @@ class ActorUtils:
             male_count:int = StoredData.pos_counts['male']
             female_count:int = StoredData.pos_counts['female']
             
-            if straight and female_count == 1 and 'femdom' not in tags and scene_pos['sex']['female']:
+            if straight and female_count == 1 and 'femdom' not in scene_tags and scene_pos['sex']['female']:
                 scene_pos['submissive'] = True
-            if straight and female_count == 2 and 'femdom' not in tags: #needs_testing
+            if straight and female_count == 2 and 'femdom' not in scene_tags: #needs_testing
                 if scene_pos['sex']['female']:
                     scene_pos['submissive'] = True
-            if straight and ('femdom' in tags or 'ffffm' in tags) and scene_pos['sex']['male']:
+            if straight and ('femdom' in scene_tags or 'ffffm' in scene_tags) and scene_pos['sex']['male']:
                 scene_pos['submissive'] = True
-            if gay and ((male_count == 2 and pos_num == 0) or ('hcos' in tags and scene_pos['race'] in {'Rabbit', 'Skeever', 'Horse'})): # needs_testing
+            if gay and ((male_count == 2 and pos_num == 0) or ('hcos' in scene_tags and scene_pos['race'] in {'Rabbit', 'Skeever', 'Horse'})): # needs_testing
                 scene_pos['submissive'] = True
             if lesbian and pos_num == 0: # needs_testing
                 scene_pos['submissive'] = True
@@ -876,66 +868,66 @@ class ActorUtils:
             #   scene_pos['submissive'] = False
 
     @staticmethod
-    def process_pos_flag_futa_2(tags:list[str], scene_pos:dict[str,any], pos_num:int, actor_key:str):
-        if 'futa' not in tags:
+    def process_pos_flag_futa_2(scene_tags:list[str], scene_pos:dict[str,any], pos_num:int, actor_key:str):
+        if 'futa' not in scene_tags:
             return
-        if 'anubs' in tags and ('ff' in tags or 'fff' in tags):
+        if 'anubs' in scene_tags and ('ff' in scene_tags or 'fff' in scene_tags):
             if actor_key[1:] in StoredData.tmp_params['has_schlong']:
                 if pos_num == int(actor_key[1:]) - 1:
                     scene_pos['sex']['female'] = False
                     scene_pos['sex']['futa'] = True
-        if 'flufyfox' in tags or 'milky' in tags:
+        if 'flufyfox' in scene_tags or 'milky' in scene_tags:
             if actor_key[1:] in StoredData.tmp_params['has_strap_on']:
                 if pos_num == int(actor_key[1:]) - 1:
                     scene_pos['sex']['female'] = False
                     scene_pos['sex']['futa'] = True
 
     @staticmethod
-    def process_pos_flag_futa_3(tags:list[str], scene_pos:dict[str,any], pos_length:int, pos_num:int):
-        if 'futa' not in tags:
+    def process_pos_flag_futa_3(scene_tags:list[str], scene_pos:dict[str,any], pos_length:int, pos_num:int):
+        if 'futa' not in scene_tags:
             return
-        if 'solo' in tags or 'futaall' in tags or ('anubs' in tags and 'mf' in tags) or ('ff' in tags and ('frotting' in tags or 'milking' in tags)):
+        if 'solo' in scene_tags or 'futaall' in scene_tags or ('anubs' in scene_tags and 'mf' in scene_tags) or ('ff' in scene_tags and ('frotting' in scene_tags or 'milking' in scene_tags)):
             if scene_pos['sex']['female']:
                 scene_pos['sex']['female'] = False
                 scene_pos['sex']['futa'] = True
-        elif 'billyy' in tags and '2futa' in tags and pos_length == 3:
+        elif 'billyy' in scene_tags and '2futa' in scene_tags and pos_length == 3:
             if pos_num == 0|1:
                 scene_pos['sex']['female'] = False
                 scene_pos['sex']['futa'] = True
-        elif 'ff' in tags and scene_pos['sex']['male']:
+        elif 'ff' in scene_tags and scene_pos['sex']['male']:
             scene_pos['sex']['male'] = False
             scene_pos['sex']['futa'] = True
 
     @staticmethod
-    def process_pos_flag_vampire(tags:list[str], scene_pos:dict[str,any], event_name:str):
-        if 'vampire' not in tags:
+    def process_pos_flag_vampire(scene_tags:list[str], scene_pos:dict[str,any], event_name:str):
+        if 'vampire' not in scene_tags:
             return
-        if TagUtils.if_any_found(tags, ['vampirefemale','vampirelesbian', 'femdom', 'cowgirl', 'vampfeedf'], event_name) and scene_pos['sex']['female']:
+        if TagUtils.if_any_found(scene_tags, ['vampirefemale','vampirelesbian', 'femdom', 'cowgirl', 'vampfeedf'], event_name) and scene_pos['sex']['female']:
             scene_pos['vampire'] = True
         elif scene_pos['sex']['male']:
             scene_pos['vampire'] = True
 
     @staticmethod
-    def process_pos_scaling(name:str, tags:list[str], scene_pos:dict[str,any]):
-        if not ('bigguy' in tags or 'scaling' in tags):
+    def process_pos_scaling(scene_name:str, scene_tags:list[str], scene_pos:dict[str,any]):
+        if not ('bigguy' in scene_tags or 'scaling' in scene_tags):
             return
-        bigguy_value = Keywords.BIGGUY_PATTERN.search(name.lower())
-        scaling_value = Keywords.SCALING_PATTERN.search(name.lower())
+        bigguy_value = Keywords.BIGGUY_PATTERN.search(scene_name.lower())
+        scaling_value = Keywords.SCALING_PATTERN.search(scene_name.lower())
         if bigguy_value:
             if scene_pos['sex']['male']:
                 scene_pos['scale'] = round(float(bigguy_value.group(2)), 2)
         if scaling_value:
             value = round(float(scaling_value.group(2)), 2)
-            if 'gs orc' in name.lower() and scene_pos['sex']['male']:
+            if 'gs orc' in scene_name.lower() and scene_pos['sex']['male']:
                 scene_pos['scale'] = value
-            if 'gs giantess' in name.lower() and scene_pos['sex']['female']:
+            if 'gs giantess' in scene_name.lower() and scene_pos['sex']['female']:
                 scene_pos['scale'] = value
-            if 'hcos small' in name.lower() and scene_pos['race'] == 'Dragon':
+            if 'hcos small' in scene_name.lower() and scene_pos['race'] == 'Dragon':
                 scene_pos['scale'] = value
 
     @staticmethod
-    def process_pos_leadin(tags:list[str], stage_pos:dict[str,any]):
-        if 'leadin' in tags:
+    def process_pos_leadin(scene_tags:list[str], stage_pos:dict[str,any]):
+        if 'leadin' in scene_tags:
             stage_pos['strip_data']['default'] = False
             stage_pos['strip_data']['helmet'] = True
             stage_pos['strip_data']['gloves'] = True
@@ -1048,25 +1040,27 @@ class ParamUtils:
         # - - - - - - - - - - - - -
 
     @staticmethod
-    def incorporate_slal_json_data(name:str, stage_num:int, tags:list[str], scene_pos:dict[str,any], stage_pos:dict[str,any], pos_num:int):
-        if name in StoredData.slal_jsons_data:
-            slal_json_data = StoredData.slal_jsons_data[name]
+    def incorporate_slal_json_data(scene_name:str, scene_tags:list[str], scene_pos:dict[str,any], stage_pos:dict[str,any], stage_num:int, pos_num:int, mode:str):
+        if scene_name in StoredData.slal_jsons_data:
+            slal_json_data = StoredData.slal_jsons_data[scene_name]
             actor_map = slal_json_data['actors']
             for i, actor_dict in enumerate(actor_map):
                 for key, value in actor_map.items():
                     actor_key = key
                     if actor_key.startswith('a'):
                         source_actor_data = actor_map[actor_key]
-                        ParamUtils.process_actor_params(source_actor_data, stage_pos, stage_num, pos_num, actor_key)
-                        # Actor-Specific Fine Tuning
-                        ActorUtils.process_pos_flag_futa_2(tags, scene_pos, pos_num, actor_key)
-                        ActorUtils.allow_flexible_futa(scene_pos, pos_num, actor_key)
+                        if mode == 'Stage':
+                            ParamUtils.process_actor_params(source_actor_data, stage_pos, stage_num, pos_num, actor_key)
+                        elif mode == 'Scene':
+                            # Actor-Specific Fine Tuning
+                            ActorUtils.process_pos_flag_futa_2(scene_tags, scene_pos, pos_num, actor_key)
+                            ActorUtils.allow_flexible_futa(scene_pos, pos_num, actor_key)
 
     @staticmethod
-    def process_stage_params(name:str, stage:dict[str,any], stage_num:int):
-        if name not in StoredData.slal_jsons_data:
+    def process_stage_params(scene_name:str, stage:dict[str,any], stage_num:int):
+        if scene_name not in StoredData.slal_jsons_data:
             return
-        slal_json_data = StoredData.slal_jsons_data[name]
+        slal_json_data = StoredData.slal_jsons_data[scene_name]
         stage_params_map = slal_json_data['stage_params']
         for key, value in stage_params_map.items():
             stage_params_key = key
@@ -1106,28 +1100,28 @@ class StageUtils:
         StoredData.pos_counts['lesbian'] = male_count == 0 and female_count > 0
 
     @staticmethod
-    def process_stage_furniture(name:str, tags:list[str], furniture:dict, pos_length:int, anim_obj_found:bool):
+    def process_scene_furniture(scene_name:str, scene_tags:list[str], furniture:dict, pos_length:int, anim_obj_found:bool):
         
         def incorporate_allowbed():
             if anim_obj_found or pos_length > 2:
                 return
-            if 'invisfurn' in tags or 'lying' not in tags or StoredData.pos_counts['cre_count'] > 0 :
+            if 'invisfurn' in scene_tags or 'lying' not in scene_tags or StoredData.pos_counts['cre_count'] > 0 :
                 return
             furniture['allow_bed'] = True
-            TagUtils.bulk_add(tags, 'allowbed')
+            TagUtils.bulk_add(scene_tags, 'allowbed')
 
         def incorporate_invisfurn():
-            if 'invisfurn' not in tags:
+            if 'invisfurn' not in scene_tags:
                 return
-            if 'bed' in name.lower():
+            if 'bed' in scene_name.lower():
                 furniture['furni_types'] = Keywords.ALLOWED_FURN['beds']
-            if 'chair' in name.lower():
+            if 'chair' in scene_name.lower():
                 furniture['furni_types'] = Keywords.ALLOWED_FURN['chairs'] + Keywords.ALLOWED_FURN['thrones']
-            if 'wall' in name.lower():
+            if 'wall' in scene_name.lower():
                 furniture['furni_types'] = Keywords.ALLOWED_FURN['walls']
-            if 'table' in name.lower():
+            if 'table' in scene_name.lower():
                 furniture['furni_types'] = [Keywords.ALLOWED_FURN['tables'][0]]
-            if 'counter' in name.lower():
+            if 'counter' in scene_name.lower():
                 furniture['furni_types'] = [Keywords.ALLOWED_FURN['tables'][1]]
 
         # - - - - - - - - - - - - -
@@ -1174,7 +1168,7 @@ class StageProcessor:
             first_event_name = fist_event[0].lower()
 
         scene_tags:list[str] = [slal_tag.lower().strip() for slal_tag in stages[0]['tags']]
-        SLATE.insert_slate_tags(scene_tags, scene_name)
+        SLATE.insert_slate_tags(scene_name, scene_tags)
         TagsRepairer.update_scene_tags(scene_name, scene_tags, anim_dir_name)
         TagsRepairer.fix_leadin_tag(scene_tags)
 
@@ -1189,7 +1183,7 @@ class StageProcessor:
         StageUtils.update_pos_counts(scene_positions)
         has_cre_vamplord:bool = any(tmp_scene_pos['race']=="Vampire Lord" for tmp_scene_pos in scene_positions)
         is_sub_scene:bool = False
-        sub_tags:list[str] = TagsRepairer.fix_submissive_tags(scene_tags, scene_name, anim_dir_name)
+        sub_tags:list[str] = TagsRepairer.fix_submissive_tags(scene_name, scene_tags, anim_dir_name)
         if sub_tags:
             is_sub_scene = True
         
