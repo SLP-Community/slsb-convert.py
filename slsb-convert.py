@@ -1159,54 +1159,26 @@ class StageUtils:
 class StageProcessor:
 
     @staticmethod
-    def process_stage(scene, stage, stages_count, stage_num, anim_dir_name, out_dir):
-        name:str = scene['name']
-        tags:list[str] = [tag.lower().strip() for tag in stage['tags']]
-        furniture:dict[str,any] = scene['furniture']
-        scene_positions:list[dict] = scene['positions']
+    def process_stage(scene_name, scene_tags, stage, stage_num, out_dir):
+        stage_tags:list[str] = []
+        stage['tags'] = stage_tags
         stage_positions:list[dict] = stage['positions']
 
-        SLATE.insert_slate_tags(tags, name)
-        TagsRepairer.update_stage_tags(name, tags, anim_dir_name)
-        #TagsRepairer.insert_legacy_stage_counts(tags, stages_count, stage_num)
-
-        is_sub_scene:bool = False
-        sub_tags:list[str] = TagsRepairer.fix_submissive_tags(tags, name, anim_dir_name)
-        if sub_tags:
-            is_sub_scene = True
-
-        SLATE.implement_slate_tags(tags, stage_num, stage_positions)
-        TagsRepairer.fix_leadin_tag(tags)
-        StageUtils.update_pos_counts(scene_positions)
-
-        has_cre_vamplord:bool = any(tmp_scene_pos['race']=="Vampire Lord" for tmp_scene_pos in scene_positions)
-        
-        pos_length:int = len(scene_positions)
+        pos_length:int = len(stage_positions)
         for i in range(pos_length):
             stage_pos:dict[str,any] = stage_positions[i]
-            scene_pos:dict[str,any] = scene_positions[i]
             pos_num:int = i
             event_name:str|None = None
             if stage_pos['event'] and len(stage_pos['event']) > 0:
                 event_name = stage_pos['event'][0].lower()
-
             ActorUtils.process_pos_animobjects(stage_pos, event_name, out_dir)
-            TagsRepairer.fix_vampire_tags(name, tags, event_name, has_cre_vamplord)
-            ActorUtils.relax_creature_gender(scene_pos)
-            ActorUtils.process_pos_flag_futa_1(tags, scene_pos, pos_length, pos_num, event_name)
-            ActorUtils.process_pos_flag_sub(tags, scene_pos, pos_num, sub_tags, is_sub_scene)
-            ParamUtils.incorporate_slal_json_data(name, stage_num, tags, scene_pos, stage_pos, pos_num)
-            ActorUtils.process_pos_flag_vampire(tags, scene_pos, event_name)
-            ActorUtils.process_pos_flag_futa_3(tags, scene_pos, pos_length, pos_num)
-            ActorUtils.process_pos_scaling(name, tags, scene_pos)
-            #ActorUtils.process_pos_leadin(tags, stage_pos)
-            
-        anim_obj_found:bool = any(tmp_stage_pos['anim_obj'] != '' and 'cum' not in tmp_stage_pos['anim_obj'].lower() for tmp_stage_pos in stage_positions)
-        TagsRepairer.fix_toys_tag(tags, anim_obj_found)
-        ParamUtils.process_stage_params(name, stage, stage_num)
-        StageUtils.process_stage_furniture(name, tags, furniture, pos_length, anim_obj_found)
+            ParamUtils.incorporate_slal_json_data(scene_name, [], [], stage_pos, stage_num, pos_num, 'Stage')
+            #ActorUtils.process_pos_leadin(scene_tags, stage_pos)
+        
+        ParamUtils.process_stage_params(scene_name, stage, stage_num)
+        SLATE.implement_slate_tags(scene_tags, stage_tags, stage_num, stage_positions)
 
-        stage['tags'] = tags
+        stage['tags'] = stage_tags
         #-----------------
 
     @staticmethod
