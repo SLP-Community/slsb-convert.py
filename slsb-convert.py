@@ -1,36 +1,34 @@
-# Script Version: 1.0 (to be used with SLSB v2.0.0+)
-from typing import ClassVar, Iterable
+# Script Version: 1.1 (to be used with SLSB v2.0.0+)
+from typing import ClassVar, Iterable, TextIO
 from datetime import datetime
 from pprint import pprint
 from pathlib import Path
 import subprocess
 import argparse
-import pathlib
 import shutil
 import json
 import time
-import os
 import re
 
 class Arguments:
 
     #required
-    slsb_path:str|None = None           # path to slsb.exe
-    parent_dir:str|None = None          # path to dir containing slal packs/modules
+    slsb_path:Path|None = None          # path to slsb.exe
+    parent_dir:Path|None = None         # path to dir containing slal packs/modules
     #recommended
-    skyrim_path:str|None = None         # path to `basegame_replica` directory
+    skyrim_path:Path|None = None        # path to `basegame_replica` directory
     remove_anims:bool = False           # True cleans up HKXs copied for behavior gen
     no_build:bool = False               # True skips building behaviour HKX files
     #public_release
-    slate_path:str|None = None          # path to slate action logs
-    slsb_json_path:str|None = None      # path to latest slsb project, for updates
+    slate_path:Path|None = None         # path to slate action logs
+    slsb_json_path:Path|None = None     # path to latest slsb project, for updates
     #optional
     stricter_futa:bool = False          # True skips assigning futa for positions with strap_on
     author:str|None = None              # name of the pack/conversion author
     #auto_determined
-    fnis_path:str|None = None           # path to fnis for modders
-    tmp_log_dir:str|None = None         # path to generated XMLs
-    temp_dir:str|None = None            # for editing slsb json
+    fnis_path:Path|None = None          # path to fnis for modders
+    tmp_log_dir:Path|None = None        # path to generated XMLs
+    temp_dir:Path|None = None           # for editing slsb json
 
     @staticmethod
     def setup_arguments():
@@ -50,18 +48,19 @@ class Arguments:
     @staticmethod
     def process_arguments():
         args = Arguments.setup_arguments()
-        Arguments.slsb_path = os.path.abspath(args.slsb)
-        Arguments.parent_dir = os.path.abspath(args.parent)
-        Arguments.skyrim_path = os.path.abspath(args.skyrim)
+        Arguments.slsb_path = Path(args.slsb).resolve()
+        Arguments.parent_dir = Path(args.parent).resolve()
+        Arguments.skyrim_path = Path(args.skyrim).resolve() if args.skyrim else None
+        Arguments.slate_path = Path(args.slate).resolve() if args.slate else None
+        Arguments.slsb_json_path = Path(args.update).resolve() if args.update else None
         Arguments.remove_anims = args.remove_anims
         Arguments.no_build = args.no_build
-        Arguments.slate_path = os.path.abspath(args.slate)
-        Arguments.slsb_json_path = os.path.abspath(args.update)
         Arguments.stricter_futa = args.stricter_futa
-        Arguments.author = args.author if args.author else 'Unknown'
-        Arguments.fnis_path = os.path.join(Arguments.skyrim_path, 'Data/tools/GenerateFNIS_for_Modders') if args.skyrim else None
-        Arguments.tmp_log_dir = os.path.join(Arguments.fnis_path, 'temporary_logs') if Arguments.fnis_path else None
-        Arguments.temp_dir = os.path.join(Arguments.skyrim_path, 'tmp_slsb_dir')
+        Arguments.author = args.author or 'Unknown'
+        Arguments.temp_dir = Arguments.slsb_path.parent/'tmp_slsb_dir'
+        if args.skyrim:
+            Arguments.fnis_path = Arguments.skyrim_path/'Data'/'tools'/'GenerateFNIS_for_Modders'
+            Arguments.tmp_log_dir = Arguments.fnis_path/'temporary_logs'
 
     @staticmethod
     def debug(*content):
@@ -94,15 +93,16 @@ class Keywords:
         'contraptions': ['XCross', 'Pillory']}
     TIMESTAMP = datetime.now().strftime('[%Y.%m.%d_%H.%M.%S]')
     # Regex Patterns
-    ANIM_PREFIX_PATTERN = re.compile(r'^\s*anim_name_prefix\("([^"]*)"\)')
-    DIR_NAME_PATTERN = re.compile(r'anim_dir\("([^"]*)"\)')
-    ANIM_START_PATTERN = re.compile(r'^\s*Animation\(')
-    ANIM_END_PATTERN = re.compile(r'^\s*\)')
-    ID_VALUE_PATTERN = re.compile(r'id="([^"]*)"')
-    NAME_VALUE_PATTERN = re.compile(r'name="([^"]*)"')
-    ACTOR_PATTERN = re.compile(r'actor\s*(\d+)\s*=\s*([^()]+)\(([^)]*)\)')
-    BIGGUY_PATTERN = re.compile(r'(base\s?scale)\s?(\d+\.\d+)')
-    SCALING_PATTERN = re.compile(r'(set\s?scale)\s?(\d+(?:\.\d+)?)?')
+    ANIM_PREFIX_PATTERN = re.compile(r'^\s*anim_name_prefix\("([^"]*)"\)', re.IGNORECASE)
+    DIR_NAME_PATTERN = re.compile(r'anim_dir\("([^"]*)"\)', re.IGNORECASE)
+    ANIM_START_PATTERN = re.compile(r'^\s*Animation\(', re.IGNORECASE)
+    ANIM_END_PATTERN = re.compile(r'^\s*\)', re.IGNORECASE)
+    ID_VALUE_PATTERN = re.compile(r'id="([^"]*)"', re.IGNORECASE)
+    NAME_VALUE_PATTERN = re.compile(r'name="([^"]*)"', re.IGNORECASE)
+    ACTOR_PATTERN = re.compile(r'actor\s*(\d+)\s*=\s*([^()]+)\(([^)]*)\)', re.IGNORECASE)
+    BIGGUY_PATTERN = re.compile(r'(base\s?scale)\s?(\d+\.\d+)', re.IGNORECASE)
+    SCALING_PATTERN = re.compile(r'(set\s?scale)\s?(\d+(?:\.\d+)?)?', re.IGNORECASE)
+    FNIS_LIST_PATTERN = re.compile(r'^fnis_(.*)_list\.txt$', re.IGNORECASE)
 
 #############################################################################################
 class StoredData:
@@ -112,12 +112,14 @@ class StoredData:
     slate_logs_data:ClassVar[list] = []
     cached_variables:ClassVar[dict] = {'action_logs_found': False} # also stores {'slal_json_filename': anim_dir_name}
     xml_with_spaces:ClassVar[list[str]|str] = []
+    processed_slal_modules:ClassVar[set] = set()
     #pack-specific mutables
     slal_jsons_data:ClassVar[dict] = {}
     source_txts_data:ClassVar[dict] = {}
     slal_fnislists_data:ClassVar[dict] = {}
     unique_animlist_options:ClassVar[list[str]|str] = []
     anim_cleanup_dirs:ClassVar[set] = set()
+    created_hardlinks:ClassVar[list[str]|str] = []
     #actor-stage-specific mutable
     tmp_params:ClassVar[dict] = {'has_strap_on': '', 'has_schlong': '', 'has_add_cum': ''}
     pos_counts:ClassVar[dict[str, int|bool]] = {}
@@ -129,6 +131,7 @@ class StoredData:
         StoredData.slal_fnislists_data.clear()
         StoredData.unique_animlist_options.clear()
         StoredData.anim_cleanup_dirs.clear()
+        StoredData.created_hardlinks.clear()
 
 #############################################################################################
 class TagUtils:
@@ -509,94 +512,93 @@ class SLATE:
 class Parsers:
 
     @staticmethod
-    def parse_slal_json(file):
-        json_array = json.load(file)
-        for json_object in json_array:
-            for scene_data in json_array["animations"]:
-                scene_info = {
-                    "scene_name": scene_data["name"],
-                    "scene_id": scene_data["id"],
-                    "scene_tags": scene_data["tags"].split(","),
-                    "scene_sound": scene_data["sound"],
-                    "actors": {},
-                    "stage_params": {}
+    def parse_slal_json(data_stream:TextIO):
+        parsed_json = json.load(data_stream)
+        for scene_data in parsed_json.get('animations', []):
+            scene_info = {
+                'scene_name': scene_data.get('name'),
+                'scene_id': scene_data.get('id'),
+                'scene_tags': scene_data.get('tags').split(','),
+                'scene_sound': scene_data.get('sound'),
+                'actors': {},
+                'stage_params': {}
+            }
+            for key, actor_data in enumerate(scene_data['actors'], 1):
+                actor_key = f'a{key}'
+                actor_info = {
+                    'actor_key': actor_key,
+                    'gender': actor_data['type'],
+                    'add_cum': actor_data.get('add_cum', 0),
+                    f'{actor_key}_stage_params': {}
                 }
-                for key, actor_data in enumerate(scene_data["actors"], 1):
-                    actor_key = f"a{key}"
-                    actor_info = {
-                        "actor_key": actor_key,
-                        "gender": actor_data["type"],
-                        "add_cum": actor_data.get("add_cum", 0),
-                        f"{actor_key}_stage_params": {}
+                for idx, actor_stage_data in enumerate(actor_data['stages'], 1):
+                    actor_stage_params_key = f'Stage {idx}'
+                    actor_stage_params_info = {
+                        'actor_stage_params_key': actor_stage_params_key,
+                        'stage_id': actor_stage_data.get('id'),
+                        'open_mouth': actor_stage_data.get('open_mouth', 'False'),
+                        'strap_on': actor_stage_data.get('strap_on', 'False'),
+                        'silent': actor_stage_data.get('silent', 'False'),
+                        'sos': actor_stage_data.get('sos', 0),
+                        'up': actor_stage_data.get('up', 0),
+                        'side': actor_stage_data.get('side', 0),
+                        'rotate': actor_stage_data.get('rotate', 0),
+                        'forward': actor_stage_data.get('forward', 0)
                     }
-                    for idx, actor_stage_data in enumerate(actor_data["stages"], 1):
-                        actor_stage_params_key = f"Stage {idx}"
-                        actor_stage_params_info = {
-                            "actor_stage_params_key": actor_stage_params_key,
-                            "stage_id": actor_stage_data["id"],
-                            "open_mouth": actor_stage_data.get("open_mouth", "False"),
-                            "strap_on": actor_stage_data.get("strap_on", "False"),
-                            "silent": actor_stage_data.get("silent", "False"),
-                            "sos": actor_stage_data.get("sos", 0),
-                            "up": actor_stage_data.get("up", 0),
-                            "side": actor_stage_data.get("side", 0),
-                            "rotate": actor_stage_data.get("rotate", 0),
-                            "forward": actor_stage_data.get("forward", 0)
-                        }
-                        actor_info[f"{actor_key}_stage_params"][actor_stage_params_key] = actor_stage_params_info
-                    
-                    scene_info["actors"][actor_key] = actor_info
+                    actor_info[f'{actor_key}_stage_params'][actor_stage_params_key] = actor_stage_params_info
                 
-                for scene_stage_data in scene_data.get("stages", []):
-                    stage_params_key = f"Stage {scene_stage_data.get('number', 'None')}"
-                    
-                    scene_stage_params_info = {
-                        "stage_params_key": stage_params_key,
-                        "sound": scene_stage_data.get("sound", "None"),
-                        "timer": scene_stage_data.get("timer", 0)
-                    }
-                    scene_info["stage_params"][stage_params_key] = scene_stage_params_info
+                scene_info['actors'][actor_key] = actor_info
+            
+            for scene_stage_data in scene_data.get('stages', []):
+                stage_params_key = f'Stage {scene_stage_data.get('number', 'None')}'
+                
+                scene_stage_params_info = {
+                    'stage_params_key': stage_params_key,
+                    'sound': scene_stage_data.get('sound', 'None'),
+                    'timer': scene_stage_data.get('timer', 0)
+                }
+                scene_info['stage_params'][stage_params_key] = scene_stage_params_info
 
-                StoredData.slal_jsons_data[scene_info["scene_name"]] = scene_info
+            StoredData.slal_jsons_data[scene_info['scene_name']] = scene_info
 
     @staticmethod
-    def parse_slsb_jsons(file):
-        parsed_json = json.load(file)
+    def parse_slsb_jsons(data_stream:TextIO):
+        parsed_json = json.load(data_stream)
         pack_info = {
-            'pack_name': parsed_json['pack_name'],
-            'pack_hash': parsed_json['prefix_hash'],
-            'pack_author': parsed_json['pack_author'],
+            'pack_name': parsed_json.get('pack_name'),
+            'pack_hash': parsed_json.get('prefix_hash'),
+            'pack_author': parsed_json.get('pack_author'),
             'scenes': {}
         }
-        for scene in parsed_json['scenes']:
-            scene_data = parsed_json['scenes'][scene]
+        for scene_id, scene_data in parsed_json.get('scenes', {}).items():
             scene_info = {
-                'scene_hash': scene_data['id'],
-                'scene_name': scene_data['name'],
+                'scene_hash': scene_data.get('id'),
+                'scene_name': scene_data.get('name'),
                 'scene_stages': {},
-                'scene_root': scene_data['root'],
-                'scene_graph': scene_data["graph"]
+                'scene_root': scene_data.get('root'),
+                'scene_graph': scene_data.get('graph')
             }
-            for i in range(len(scene_data['stages'])):
-                stage_data = scene_data['stages'][i]
+            for i, stage_data in enumerate(scene_data.get('stages', {})):
+                extra = stage_data.get('extra')
                 stage_info = {
-                    'stage_hash': stage_data['id'],
-                    'stage_name': stage_data['name'],
-                    'navigation_text': stage_data['extra']['nav_text']
+                    'stage_hash': stage_data.get('id'),
+                    'stage_name': stage_data.get('name'),
+                    'navigation_text': extra.get('nav_text')
                 }
                 scene_info['scene_stages'][i] = stage_info
 
-            pack_info['scenes'][scene] = scene_info
+            pack_info['scenes'][scene_id] = scene_info
 
-        StoredData.slsb_jsons_data[pack_info['pack_name']] = pack_info
+        if pack_info['pack_name']:
+            StoredData.slsb_jsons_data[pack_info['pack_name']] = pack_info
 
     @staticmethod
-    def parse_source_txt(file):
+    def parse_source_txt(data_stream:TextIO):
         inside_animation:bool = False
         anim_name_prefix:str = ''
         anim_full_name:str = ''
 
-        for line in file:
+        for line in data_stream:
             line = line.strip()
             if line:
 
@@ -630,75 +632,58 @@ class Parsers:
                         inside_animation = False
 
     @staticmethod
-    def parse_slal_fnislists(parent_dir,_dir, file):
-        path = os.path.join(parent_dir, file)
-        with open(path, 'r') as topo_file:
-            last_seq = None
-            for line in topo_file:
-                line = line.strip()
-                if len(line) > 0 and line[0] != "'":
-                    splits = line.split()
-                    if (len(splits)) == 0 or splits[0].lower() in ('version', 'ï»¿version'):
-                        continue
+    def parse_slal_fnislists(list_parent_path:Path, list_name:str, list_out_path:Path|None):
+        list_path:Path = list_parent_path/list_name
+        lines = list_path.read_text(encoding='utf-8', errors='replace').splitlines()
 
-                    anim_file_name:str|None = None
-                    anim_event_name:str|None = None
-                    options:list[str] = []
-                    anim_objects:list[str] = []
+        for line in lines:
+            line = line.strip()
+            if not line or line.startswith("'"):
+                continue
+            splits = line.split()
+            if not splits or splits[0].lower() in ('version', 'ï»¿version'):
+                continue
 
-                    for i in range(len(splits)):
-                        split = splits[i]
-                        if anim_event_name is not None and split not in anim_objects:
-                            anim_objects.append(split)
-                        if '.hkx' in split.lower():
-                            anim_file_name = splits[i]
-                            anim_event_name = splits[i - 1]
-                        if split.startswith("-"):
-                            options_list = split[1:].split(",")
-                            for item in options_list:
-                                if item.lower() not in ('avbhumanoidfootikdisable', 'tn', 'o', 'a') and item not in options:
-                                    options.append(item)
+            anim_file_name:str|None = None
+            anim_event_name:str|None = None
+            options:list[str] = []
+            anim_objects:list[str] = []
 
-                    if options:
-                        StoredData.unique_animlist_options.extend([anim_file_name, options])
-                    
-                    anim_event_name = anim_event_name.lower()
-                    if '-a,' in line or '-a ' in line or '-o,a,' in line or '-o,a ' in line:
-                        last_seq = anim_event_name
-                    
-                    anim_path = os.path.join(parent_dir, anim_file_name)
-                    out_path = os.path.normpath(anim_path)
-                    out_path = out_path.split(os.sep)
+            for i, split in enumerate(splits):
+                if len(split) == 1:
+                    continue
+                elif split.startswith('-'):
+                    options_list = split[1:].split(',')
+                    for item in options_list:
+                        if item.lower() not in ('avbhumanoidfootikdisable', 'tn', 'o', 'a', 'md') and item not in options:
+                            options.append(item)
+                elif '.hkx' in split.lower():
+                    anim_file_name = splits[i]
+                    anim_event_name = splits[i-1].lower()
+                else:
+                    if anim_event_name is not None and split not in anim_objects:
+                        anim_objects.append(split)
+            
+            if not anim_file_name or not anim_event_name:
+                continue
+            if options:
+                StoredData.unique_animlist_options.extend([anim_file_name, options])
+            
+            anim_file_path:Path = list_parent_path/anim_file_name
+            meshes_dir_idx = next(i for i, part in enumerate(anim_file_path.parts) if part.lower() == 'meshes')
+            relative_out_path = Path(*anim_file_path.parts[meshes_dir_idx:])
 
-                    for i in range(len(out_path) - 1, -1, -1):
-                        if (out_path[i].lower() == 'meshes'):
-                            out_path = out_path[i:]
-                            break
-                
-                    out_path = os.path.join('', *out_path)
-                    
-                    data = {
-                        'anim_file_name': anim_file_name,
-                        'options': options,
-                        'anim_obj': anim_objects,
-                        'path': anim_path,
-                        'out_path': out_path,
-                        'sequence': []
-                    }
-
-                    if last_seq is None:
-                        StoredData.slal_fnislists_data[anim_event_name] = data
-                    else:
-                        try:
-                            StoredData.slal_fnislists_data[last_seq]['sequence'].append(data)
-                            # Don't know what this is supposed to do; the ['sequence'] is empty so always KeyError
-                        except KeyError:
-                            StoredData.slal_fnislists_data[last_seq] = data
-                    last_seq = None
+            data = {
+                'anim_file_name': anim_file_name,
+                'anim_obj': anim_objects,
+                'anim_file_path': anim_file_path,
+                'relative_out_path': relative_out_path,
+            }
+            StoredData.slal_fnislists_data[anim_event_name] = data
 
     @staticmethod 
-    def parse_slate_actionlogs(file):
-        info = json.load(file)
+    def parse_slate_actionlogs(data_stream:TextIO):
+        info = json.load(data_stream)
         string_list = info["stringList"]["slate.actionlog"]
         
         for item in string_list:
@@ -717,121 +702,122 @@ class Parsers:
 class Editors:
 
     @staticmethod
-    def fix_slal_jsons(working_dir):
-        anim_source_dir = working_dir + "\\SLAnims\\source"
-        slal_jsons_dir = working_dir + "\\SLAnims\\json"
-        anim_meshes_dir = working_dir + "\\meshes\\actors\\character\\animations"
+    def fix_slal_jsons(slal_module_path:Path):
+        anim_source_dir = slal_module_path/'SLAnims'/'source'
+        slal_jsons_dir = slal_module_path/'SLAnims'/'json'
+        anim_dir_path = slal_module_path/'meshes'/'actors'/'character'/'animations'
 
-        def prompt_for_existing_dir(dirs, anim_dir_path, json_base_name):
+        def prompt_for_existing_dir(dirs:list[str], anim_dir_path:Path, json_base_name:str) -> str:
             Arguments.debug(f"\nERROR: Could not auto-determine AnimDirName for: {json_base_name}.json")
             if not dirs:
                 raise ValueError(f"No valid directories found in {anim_dir_path}")
             Arguments.debug("Please select from these existing directories:")
             for i, d in enumerate(dirs, 1):
-                Arguments.debug(f"{i}. {d}")
+                Arguments.debug(f"{i:2d}. {d}")
             while True:
                 try:
                     choice = int(input("\nEnter number (1-{}): ".format(len(dirs))))
                     if 1 <= choice <= len(dirs):
                         return dirs[choice-1]
-                    Arguments.debug("Invalid number, try again")
+                    Arguments.debug(f'Invalid range. Please enter a number between 1 and {len(dirs)}.')
                 except ValueError:
-                    Arguments.debug("Please enter a valid number")
+                    Arguments.debug('Input must be an integer.')
 
-        def find_animdirname(filename, slal_json_path):
-            if os.path.isfile(slal_json_path) and filename.lower().endswith(".json"):
-                json_base_name = pathlib.Path(filename).stem
-                if json_base_name not in StoredData.cached_variables:
-                    StoredData.cached_variables[json_base_name] = {}
-                matching_source_path = None
-                if os.path.exists(anim_source_dir):
-                    for source_file in os.listdir(anim_source_dir):
-                        if source_file.lower().endswith(".txt") and pathlib.Path(source_file).stem.lower() == json_base_name.lower():
-                            matching_source_path = os.path.join(anim_source_dir, source_file)
-                            break
-                    if matching_source_path is not None:
-                        with open(matching_source_path, 'r') as txt_file:
-                            for line in txt_file:
-                                anim_dir_match = Keywords.DIR_NAME_PATTERN.search(line)
-                                if anim_dir_match:
-                                    StoredData.cached_variables[json_base_name]['anim_dir_name'] = anim_dir_match.group(1)
-                                    break
-                if (not os.path.exists(anim_source_dir) and os.path.exists(anim_meshes_dir)) \
-                    or (os.path.exists(anim_source_dir) and matching_source_path is None):
-                    dirs = [d for d in os.listdir(anim_meshes_dir) if os.path.isdir(os.path.join(anim_meshes_dir, d))]
+        def find_animdirname(slal_json_path:Path) -> str:
+            json_base_name:str = slal_json_path.stem
+            if json_base_name not in StoredData.cached_variables:
+                StoredData.cached_variables[json_base_name] = {}
+            matching_source_path:Path = None
+            if anim_source_dir.exists():
+                for source_file_path in anim_source_dir.glob('*.txt'):
+                    if source_file_path.stem.lower() == json_base_name.lower():
+                        matching_source_path = source_file_path
+                        break
+                if matching_source_path:
+                    with matching_source_path.open('r', encoding='utf-8') as txt_stream:
+                        for line in txt_stream:
+                            if anim_dir_match := Keywords.DIR_NAME_PATTERN.search(line):
+                                StoredData.cached_variables[json_base_name]['anim_dir_name'] = anim_dir_match.group(1)
+                                return anim_dir_match.group(1)
+            if not anim_source_dir.exists() or matching_source_path is None:
+                if anim_dir_path.exists():
+                    dirs:list[str] = [d.name for d in anim_dir_path.iterdir() if d.is_dir()]            
                     if len(dirs) == 1:
-                        StoredData.cached_variables[json_base_name]['anim_dir_name'] = dirs[0]
+                        final_dir = dirs[0]
+                    elif (anim_dir_path/json_base_name).is_dir():
+                        final_dir = json_base_name
                     else:
-                        potential_dir = os.path.join(anim_meshes_dir, json_base_name)
-                        if os.path.isdir(potential_dir):
-                            StoredData.cached_variables[json_base_name]['anim_dir_name'] = json_base_name
-                        else:
-                            selected_dir = prompt_for_existing_dir(dirs, anim_meshes_dir, json_base_name)
-                            StoredData.cached_variables[json_base_name]['anim_dir_name'] = selected_dir
+                        final_dir = prompt_for_existing_dir(dirs, anim_dir_path, json_base_name)
+                    StoredData.cached_variables[json_base_name]['anim_dir_name'] = final_dir
+                    return final_dir
+            return ''
 
-                return StoredData.cached_variables[json_base_name]['anim_dir_name']
-
-        def fix_typegender(json_data):
+        def fix_typegender(json_data:TextIO) -> bool:
             changes_made:bool = False
-            if "animations" in json_data:
-                for scene_data in json_data["animations"]:
-                    for key, actor_data in enumerate(scene_data["actors"], 1):
-                        if actor_data["type"].lower() == "type":
-                            anim_name_with_type = scene_data["name"]
-                            if anim_name_with_type in StoredData.source_txts_data:
-                                required_scene_data = StoredData.source_txts_data[anim_name_with_type]
-                                if str(key) in required_scene_data['actors']:
-                                    required_actor_data = required_scene_data['actors'][str(key)]
-                                    actor_data["type"] = required_actor_data['actor_gender']
-                                    changes_made = True
+            anim_data = json_data.get("animations")
+            for scene_data in anim_data:
+                for key, actor_data in enumerate(scene_data["actors"], 1):
+                    if actor_data["type"].lower() == "type":
+                        anim_name_with_type = scene_data["name"]
+                        if anim_name_with_type in StoredData.source_txts_data:
+                            required_scene_data = StoredData.source_txts_data[anim_name_with_type]
+                            if str(key) in required_scene_data['actors']:
+                                required_actor_data = required_scene_data['actors'][str(key)]
+                                actor_data["type"] = required_actor_data['actor_gender']
+                                changes_made = True
             return changes_made
 
-        for filename in os.listdir(slal_jsons_dir):
-            slal_json_path = os.path.join(slal_jsons_dir, filename)
-            anim_dir_name:str = find_animdirname(filename, slal_json_path)
+        for slal_json_path in slal_jsons_dir.glob('*.json'):
+            json_data = json.loads(slal_json_path.read_text(encoding='utf-8'))
             changes_made:bool = False
-            with open(slal_json_path, 'r+') as json_file:
-                json_data = json.load(json_file)
-                # Fix directory name
-                if anim_dir_name and "name" in json_data and json_data["name"].lower() != anim_dir_name.lower():
-                    json_data["name"] = anim_dir_name
-                    changes_made = True
-                # Fix type-type gender
-                if fix_typegender(json_data):
-                    changes_made = True
-                # Edit the SLAL json
-                if changes_made:
-                    Arguments.debug("---------> FIXING SLAL JSONs")
-                    json_file.seek(0)
-                    json.dump(json_data, json_file, indent=2)
-                    json_file.truncate()
+            # Fix directory name
+            anim_dir_name:str = find_animdirname(slal_json_path)
+            name_in_json = json_data.get('name', '')
+            if anim_dir_name and name_in_json.lower() != anim_dir_name.lower():
+                json_data['name'] = anim_dir_name
+                changes_made = True
+            # Fix type-type gender
+            if fix_typegender(json_data):
+                changes_made = True
+            if changes_made:
+                Arguments.debug("---------> FIXING SLAL JSONs")
+                content = json.dumps(json_data, indent=2)
+                slal_json_path.write_text(content, encoding='utf-8')
 
     @staticmethod
-    def edit_output_fnis(file_path, _dir, filename):
-        full_path = os.path.join(file_path, filename)
+    def fix_slsb_event_names(stage_pos:dict[str,any], event_name:str):
+        if event_name and event_name in StoredData.slal_fnislists_data.keys():
+            required_info = StoredData.slal_fnislists_data[event_name]
+            stage_pos['event'][0] = Path(required_info['anim_file_name']).stem
+
+    @staticmethod
+    def edit_output_fnis(list_parent_path:Path, list_name:str, list_out_path:Path|None):
+        list_path:Path = list_parent_path/list_name
+        data_strean:TextIO = list_path.read_text(encoding='utf-8').splitlines()
         modified_lines = []
-
-        with open(full_path, 'r') as file:
-            for line in file:
-                splits = line.split()
-                for i in range(len(splits)):
-                    
-                    if splits[i] in StoredData.unique_animlist_options:
-                        idx = StoredData.unique_animlist_options.index(splits[i])
-                        options = ",".join(StoredData.unique_animlist_options[idx + 1])
-                        if splits[i-2] == "b":
-                            splits[i-2] = f"b -{options}"
-                        if splits[i-2] == "-o":
-                            splits[i-2] = f"-o,{options}"
-                        if splits[i-2] == "-a,tn":
-                            splits[i-2] = f"-a,tn,{options}"
-                        if splits[i-2] == "-o,a,tn":
-                            splits[i-2] = f"-o,a,tn,{options}"
-                        line = " ".join(splits) + "\n"
-
+        opt_insert_map = {
+            "b": lambda opt: f"b -{opt}",
+            "-o": lambda opt: f"-o,{opt}",
+            "-a,tn": lambda opt: f"-a,tn,{opt}",
+            "-o,a,tn": lambda opt: f"-o,a,tn,{opt}"
+        }
+        for line in data_strean:
+            if not line.strip():
                 modified_lines.append(line)
-        with open(full_path, 'w') as file:
-            file.writelines(modified_lines)
+                continue
+            splits = line.split()
+            line_changed = False
+            for i, split in enumerate(splits):
+                if split in StoredData.unique_animlist_options:     # (split==anim_file_name)
+                    idx = StoredData.unique_animlist_options.index(split)
+                    options = ",".join(StoredData.unique_animlist_options[idx+1])
+                    opt_inset_point = splits[i-2]
+                    if opt_inset_point in opt_insert_map:
+                        splits[i-2] = opt_insert_map[opt_inset_point](options)
+                        line_changed = True
+            modified_lines.append(" ".join(splits) if line_changed else line)
+
+        list_path.write_text("\n".join(modified_lines) + "\n", encoding='utf-8')
 
 #############################################################################################
 class ActorUtils:
@@ -950,14 +936,10 @@ class ActorUtils:
             stage_pos['strip_data']['gloves'] = True
 
     @staticmethod
-    def process_pos_animobjects(stage_pos:dict[str,any], event_name:str, out_dir:str):
+    def process_pos_animobjects(stage_pos:dict[str,any], event_name:str):
         if event_name and event_name in StoredData.slal_fnislists_data.keys():
             required_info = StoredData.slal_fnislists_data[event_name]
-            stage_pos['event'][0] = os.path.splitext(required_info['anim_file_name'])[0]
-            if Arguments.skyrim_path is not None:
-                os.makedirs(os.path.dirname(os.path.join(out_dir, required_info['out_path'])), exist_ok=True)
-                shutil.copyfile(required_info['path'], os.path.join(out_dir, required_info['out_path']))
-            if 'anim_obj' in required_info and required_info['anim_obj'] is not None:
+            if required_info.get('anim_obj'):
                 stage_pos['anim_obj'] = ','.join(required_info['anim_obj'])
 
     @staticmethod
@@ -1150,7 +1132,7 @@ class StageUtils:
 class PackageProcessor:
 
     @staticmethod
-    def process_stage(scene_name, scene_tags, stage, stage_num, out_dir):
+    def process_stage(scene_name:str, scene_tags:list[str], stage:dict[str,any], stage_num:int):
         stage_tags:list[str] = []
         stage['tags'] = stage_tags
         stage_positions:list[dict] = stage['positions']
@@ -1162,7 +1144,8 @@ class PackageProcessor:
             event_name:str|None = None
             if stage_pos['event'] and len(stage_pos['event']) > 0:
                 event_name = stage_pos['event'][0].lower()
-            ActorUtils.process_pos_animobjects(stage_pos, event_name, out_dir)
+            Editors.fix_slsb_event_names(stage_pos, event_name)
+            ActorUtils.process_pos_animobjects(stage_pos, event_name)
             ParamUtils.incorporate_slal_json_data(scene_name, [], [], stage_pos, stage_num, pos_num, 'Stage')
             #ActorUtils.process_pos_leadin(scene_tags, stage_pos)
         
@@ -1173,7 +1156,7 @@ class PackageProcessor:
         #-----------------
 
     @staticmethod
-    def process_scene(scene, anim_dir_name, out_dir):
+    def process_scene(scene:dict[str,any], anim_dir_name:str):
         scene_name:str = scene['name']
         stages:list[dict] = scene['stages']
         scene_positions:list[dict] = scene['positions']
@@ -1193,7 +1176,7 @@ class PackageProcessor:
         for i in range(len(stages)):
             stage = stages[i]
             stage_num = i + 1
-            PackageProcessor.process_stage(scene_name, scene_tags, stage, stage_num, out_dir)
+            PackageProcessor.process_stage(scene_name, scene_tags, stage, stage_num)
             if not anim_obj_found:
                 anim_obj_found = any(tmp_stage_pos['anim_obj'] != '' and 'cum' not in tmp_stage_pos['anim_obj'].lower() for tmp_stage_pos in stage['positions'])
 
@@ -1231,359 +1214,284 @@ class PackageProcessor:
         #-----------------
 
     @staticmethod
-    def edit_slsb_json(out_dir):
-        for filename in os.listdir(Arguments.temp_dir):
-            path = os.path.join(Arguments.temp_dir, filename)
-            if os.path.isdir(path):
-                continue
-
-            anim_dir_name:str = ''
-            if filename.endswith('.slsb.json'):
-                base_name = filename.removesuffix(".slsb.json")
-                if base_name in StoredData.cached_variables:
-                    anim_dir_name = (StoredData.cached_variables[base_name]['anim_dir_name'])
-
-            Arguments.debug('editing slsb', filename)
-            data = None
-            with open(path, 'r') as f:
-                data = json.load(f)
-                data['pack_author'] = Arguments.author
-                
-                pack_data_old = {}
-                scenes_old = {}
-                if data['pack_name'] in StoredData.slsb_jsons_data:
-                    pack_data_old = StoredData.slsb_jsons_data[data['pack_name']]
-                    scenes_old = pack_data_old['scenes']
-                    data['prefix_hash'] = pack_data_old['pack_hash']
-                    if data['pack_author'] == 'Unknown':
-                        data['pack_author'] = pack_data_old['pack_author']
-
-                new_scenes = {}
-                scenes = data['scenes']
+    def edit_slsb_json():
+        temp_edit_dir:Path = Arguments.temp_dir/'edited'
+        for slsb_json_path in Arguments.temp_dir.glob('*.slsb.json'):
+            base_name:str = slsb_json_path.name.removesuffix(".slsb.json")
+            anim_dir_name:str = StoredData.cached_variables.get(base_name, {}).get('anim_dir_name', '')
+            Arguments.debug(f'editing slsb: {slsb_json_path.name}')
+            json_data = json.loads(slsb_json_path.read_text(encoding='utf-8'))
+            json_data['pack_author'] = Arguments.author
+            pack_name:str = json_data.get('pack_name')
+            scenes_old_lookup_map = {}
+            if pack_name in StoredData.slsb_jsons_data:
+                pack_data_old = StoredData.slsb_jsons_data[pack_name]
+                json_data['prefix_hash'] = pack_data_old.get('pack_hash')
+                if json_data.get('pack_author') == 'Unknown':
+                    json_data['pack_author'] = pack_data_old.get('pack_author')
+                scenes_old_lookup_map = {
+                    val['scene_name']: val['scene_hash'] 
+                    for val in pack_data_old.get('scenes', {}).values()
+                }
+                scenes = json_data.get('scenes', {})
                 sorted_scene_items = sorted(scenes.items(), key=lambda item: item[1].get('name', ''))
-
-                for id, scene, in sorted_scene_items:
-                    for item in scenes_old:
-                        if scene['name'] == scenes_old[item]['scene_name']:
-                            scene['id'] = scenes_old[item]['scene_hash']
+                new_scenes = {}
+                for scene_id, scene in sorted_scene_items:
+                    current_scene_name = scene.get('name')
+                    if current_scene_name in scenes_old_lookup_map:
+                        scene['id'] = scenes_old_lookup_map[current_scene_name]
+                    PackageProcessor.process_scene(scene, anim_dir_name)
                     new_scenes[scene['id']] = scene
 
-                    PackageProcessor.process_scene(scene, anim_dir_name, out_dir)
-
-                data['scenes'] = new_scenes
-
-            edited_path = Arguments.temp_dir + '/edited/' + filename
-            with open(edited_path, 'w') as f:
-                json.dump(data, f, indent=2)
+                json_data['scenes'] = new_scenes
+                output_path = temp_edit_dir/slsb_json_path.name
+                output_path.write_text(json.dumps(json_data, indent=2), encoding='utf-8')
 
 #############################################################################################
 class ConvertUtils:
 
     @staticmethod
     def execute_slsb_parsers():
-        if Arguments.slsb_json_path is not None:
+        if Arguments.slsb_json_path:
             Arguments.debug("\n--> PARSING SLSB JSON PROJECTS")
-            for filename in os.listdir(Arguments.slsb_json_path):
-                path = os.path.join(Arguments.slsb_json_path, filename)
-                if os.path.isfile(path) and filename.lower().endswith(".slsb.json"):
-                    with open(path, "r") as file:
-                        Parsers.parse_slsb_jsons(file)
+            for json_path in Arguments.slsb_json_path.iterdir():
+                if json_path.is_file() and json_path.name.endswith(".slsb.json"):
+                    with json_path.open("r", encoding="utf-8") as data_stream:
+                        Parsers.parse_slsb_jsons(data_stream)
 
-        if Arguments.slate_path is not None:
+        if Arguments.slate_path:
             Arguments.debug("--> PARSING SLATE ACTION_LOGS")
-            for filename in os.listdir(Arguments.slate_path):
-                path = os.path.join(Arguments.slate_path, filename)
-                if os.path.isfile(path) and filename.lower().endswith('.json') \
-                    and (filename.lower().startswith('slate_actionlog') or filename.lower().startswith('hentairim')):
-                    StoredData.cached_variables['action_logs_found'] = True
-                    with open(path, "r") as file:
-                        Parsers.parse_slate_actionlogs(file)
+            for slate_path in Arguments.slate_path.iterdir():
+                if slate_path.is_file() and slate_path.suffix.lower() == '.json':
+                    if slate_path.name.lower().startswith(('slate_actionlog', 'hentairim')):
+                        StoredData.cached_variables['action_logs_found'] = True
+                        with slate_path.open("r", encoding="utf-8") as data_stream:
+                            Parsers.parse_slate_actionlogs(data_stream)
 
     @staticmethod
-    def execute_slal_parsers(working_dir):
-        slal_jsons_dir = working_dir + '\\SLAnims\\json'
-        slal_source_dir = working_dir + '\\SLAnims\\source'
-        slal_fnislists_dir = working_dir + '\\meshes\\actors'
+    def execute_slal_parsers(slal_module_path:Path):
+        slal_jsons_dir = slal_module_path/'SLAnims'/'json'
+        slal_source_dir = slal_module_path/'SLAnims'/'source'
+        slal_actors_dir = slal_module_path/'meshes'/'actors'
 
-        if os.path.exists(slal_jsons_dir):
+        if slal_jsons_dir.is_dir():
             Arguments.debug("---------> PARSING SLAL JSON FILES")
-            for filename in os.listdir(slal_jsons_dir):
-                path = os.path.join(slal_jsons_dir, filename)
-                if os.path.isfile(path) and filename.lower().endswith(".json"):
-                    with open(path, "r") as file:
-                        Parsers.parse_slal_json(file)
+            for json_path in slal_jsons_dir.iterdir():
+                if json_path.is_file() and json_path.suffix.lower() == ".json":
+                    with json_path.open("r", encoding="utf-8") as data_stream:
+                        Parsers.parse_slal_json(data_stream)
 
-        if os.path.exists(slal_source_dir):
+        if slal_source_dir.is_dir():
             Arguments.debug("---------> PARSING SLAL SOURCE TXTs")
-            for filename in os.listdir(slal_source_dir):
-                path = os.path.join(slal_source_dir, filename)
-                if os.path.isfile(path) and filename.lower().endswith(".txt"):
-                    with open(path, "r") as file:
-                        Parsers.parse_source_txt(file)
+            for txt_path in slal_source_dir.iterdir():
+                if txt_path.is_file() and txt_path.suffix.lower() == ".txt":
+                    with txt_path.open("r", encoding="utf-8") as data_stream:
+                        Parsers.parse_source_txt(data_stream)
 
-        if os.path.exists(slal_fnislists_dir):
+        if slal_actors_dir.is_dir():
             Arguments.debug("---------> PARSING SLAL FNIS LISTS")
-            for item in os.listdir(slal_fnislists_dir):
-                path = os.path.join(slal_fnislists_dir, item)
-                if os.path.isdir(path):
-                    ConvertUtils.iter_fnis_lists(path,'',Parsers.parse_slal_fnislists)    
+            for actor_path in slal_actors_dir.iterdir():
+                if actor_path.is_dir():
+                    ConvertUtils.iter_fnis_lists(actor_path, None, Parsers.parse_slal_fnislists)
 
     @staticmethod
-    def iter_fnis_lists(dir, _dir, func):
-        anim_dir = os.path.join(dir, 'animations')
-        if os.path.exists(anim_dir) and os.path.exists(os.path.join(dir, 'animations')):
-            for filename in os.listdir(anim_dir):
-                path = os.path.join(anim_dir, filename)
-                if os.path.isdir(path):
-                    for filename in os.listdir(path):
-                        if filename.startswith('FNIS_') and filename.endswith('_List.txt'):
-                            func(path, _dir, filename)
-        elif os.path.isdir(dir):
-            for filename in os.listdir(dir):
-                path = os.path.join(dir, filename)
-                ConvertUtils.iter_fnis_lists(path, _dir, func)
+    def iter_fnis_lists(actor_source_path:Path, actor_out_path:Path|None, func):
+        for list_path in actor_source_path.rglob('FNIS_*_List.txt'):
+            if list_path.parent.parent.name.lower() == 'animations':
+                func(list_path.parent, list_path.name, actor_out_path)
 
     @staticmethod
-    def build_behaviour(parent_dir, out_dir, list_name):
-        list_path = os.path.join(parent_dir, list_name)
+    def hardlink_hkx_files(module_out_path:Path):
+        # relies on unedited event names from non-edited slsb jsons
+        # this complies with key names in StoredData.slal_fnislists_data
+        for slsb_json_path in Arguments.temp_dir.glob('*.slsb.json'):
+            json_data = json.loads(slsb_json_path.read_text(encoding='utf-8'))
+            valid_targets = (
+                event.lower()
+                for scene in json_data.get('scenes', {}).values()
+                for stage in scene.get('stages', [])
+                for pos in stage.get('positions', [])
+                for event in pos.get('event', [])
+                if event.lower() in StoredData.slal_fnislists_data
+            )
+            for event_name in valid_targets:
+                required_info = StoredData.slal_fnislists_data[event_name]
+                source_hkx_path:Path = required_info['anim_file_path'].resolve()
+                target_hkx_path:Path = (module_out_path/required_info['relative_out_path']).resolve()
+                if source_hkx_path.exists() and not target_hkx_path.exists():
+                    target_hkx_path.parent.mkdir(parents=True, exist_ok=True)
+                    target_hkx_path.hardlink_to(source_hkx_path)
+                    StoredData.created_hardlinks.append(target_hkx_path)
+
+    @staticmethod
+    def cleanup_hkx_hardlinks():
+        for link_path in StoredData.created_hardlinks:
+            if link_path.exists():
+                link_path.unlink()
+        StoredData.created_hardlinks.clear()
+
+    @staticmethod
+    def build_behaviors(list_parent_path:Path, list_name:str, list_out_path:Path|None):
+        behavior_dir:str = 'behaviors' if '_wolf' not in list_name.lower() else 'behaviors wolf'
         if '_canine' in list_name.lower():
             return
-        behavior_file_name = list_name.lower().replace('fnis_', '')
-        behavior_file_name = behavior_file_name.lower().replace('_list.txt', '')
-        behavior_file_name = 'FNIS_' + behavior_file_name + '_Behavior.hkx'
-        Arguments.debug('generating', behavior_file_name)
-
-        cwd = os.getcwd()
-        os.chdir(Arguments.fnis_path)
-        output = subprocess.Popen(f"./commandlinefnisformodders.exe \"{list_path}\"", stdout=subprocess.PIPE).stdout.read()
-        os.chdir(cwd)
-
-        out_path_parts = os.path.normpath(list_path).split(os.sep)
         
-        start_index = -1
-        end_index = -1
+        list_path:Path = list_parent_path/list_name
+        behavior_file_name:str = list_path.stem
+        if match := Keywords.FNIS_LIST_PATTERN.match(list_name):
+            core_name = match.group(1)
+            behavior_file_name = f'FNIS_{core_name}_Behavior.hkx'
+ 
+        Arguments.debug('generating', behavior_file_name)
+        cli_fnis_tool_path:Path = Arguments.fnis_path/'commandlinefnisformodders.exe'
+        input_command:list[str] = [str(cli_fnis_tool_path), str(list_path)]
+        subprocess.run(input_command, cwd=Arguments.fnis_path, capture_output=True, check=True)
 
-        for i in range(len(out_path_parts) - 1, -1, -1):
-            split = out_path_parts[i].lower()
+        list_path_parts = list_path.parts
+        start_idx = next(i for i, p in enumerate(list_path_parts) if p.lower() == 'meshes')
+        end_idx = next(i for i, p in enumerate(list_path_parts) if p.lower() == 'animations')
+        relative_list_path:Path = Path(*list_path_parts[start_idx:end_idx])
+        behavior_gen_path:Path = Arguments.skyrim_path/'Data'/relative_list_path/behavior_dir/behavior_file_name
 
-            if split == 'meshes':
-                start_index = i
-            elif split == 'animations':
-                end_index = i
-
-        behaviour_folder = 'behaviors' if '_wolf' not in list_name.lower() else 'behaviors wolf'
-        behaviour_path = os.path.join(Arguments.skyrim_path, 'data', *out_path_parts[start_index:end_index], behaviour_folder, behavior_file_name)
-
-        if os.path.exists(behaviour_path):
-            out_behavior_dir = os.path.join(out_dir, *out_path_parts[start_index:end_index], behaviour_folder)
-            out_behaviour_path = os.path.join(out_behavior_dir, behavior_file_name)
-            os.makedirs(out_behavior_dir, exist_ok=True)
-            if os.path.exists(out_behaviour_path):
-                os.remove(out_behaviour_path)
-            shutil.move(behaviour_path, out_behaviour_path)
+        if behavior_gen_path.exists():
+            out_behavior_dir:Path = list_out_path/relative_list_path/behavior_dir
+            out_behavior_dir.mkdir(parents=True, exist_ok=True)
+            behavior_out_path:Path = out_behavior_dir/behavior_file_name
+            shutil.move(str(behavior_gen_path), str(behavior_out_path))
 
         if Arguments.remove_anims:
-            StoredData.anim_cleanup_dirs.add(parent_dir)
-
-    @staticmethod
-    def do_remove_anims(parent_dir):
-        for filename in os.listdir(parent_dir):
-            if os.path.splitext(filename)[1].lower() == '.hkx':
-                os.remove(os.path.join(parent_dir, filename))
-        if parent_dir.endswith("EstrusSLSB"):
-            base_dir = os.path.dirname(parent_dir)
-            for item in os.listdir(base_dir):
-                item_path = os.path.join(base_dir, item)
-                if item == "EstrusSLSB":
-                    continue
-                if os.path.isfile(item_path):
-                    os.remove(item_path)
-                elif os.path.isdir(item_path):
-                    shutil.rmtree(item_path)
+            StoredData.anim_cleanup_dirs.add(list_parent_path)
 
 #############################################################################################
 class ConvertMain:
 
     @staticmethod
-    def do_convert_single(parent_dir, dir):
-        working_dir = os.path.join(parent_dir, dir)
-        out_dir = os.path.join(Path(parent_dir).parent, 'SLSB_Outputs', 'conversions '+Keywords.TIMESTAMP, dir)
+    def do_convert_single(slal_module_path:Path):
+        slal_jsons_dir:Path = slal_module_path/'SLAnims'/'json'
+        if not slal_jsons_dir.exists() or not any(slal_jsons_dir.glob('*.json')):
+            Arguments.debug(f"\033[93m\n[SKIP] No JSON files found in {slal_module_path.name}/SLAnims/json/\033[0m")
+            return
+        Arguments.debug(f'\n\033[92m============== PROCESSING {slal_module_path.name} ==============\033[0m')
+        module_out_path:Path = Arguments.parent_dir.parent/'SLSB_Outputs'/f'conversions {Keywords.TIMESTAMP}'/slal_module_path.name
+        slsb_project_dir:Path = module_out_path/'SKSE'/'SexLab'/'Registry'/'Source'
+        temp_edit_dir:Path = Arguments.temp_dir/'edited'
+        slsb_project_dir.mkdir(parents=True, exist_ok=True)
+        temp_edit_dir.mkdir(parents=True, exist_ok=True)
 
-        if os.path.exists(Arguments.temp_dir):
-            shutil.rmtree(Arguments.temp_dir)
-        os.makedirs(Arguments.temp_dir + '/edited')
-        os.makedirs(out_dir + '/SKSE/Sexlab/Registry/Source')
-
-        StoredData.reset_stored_data()
-        ConvertUtils.execute_slal_parsers(working_dir)
-        Editors.fix_slal_jsons(working_dir)
+        ConvertUtils.execute_slal_parsers(slal_module_path)
+        Editors.fix_slal_jsons(slal_module_path)
 
         Arguments.debug("---------> CONVERTING SLAL TO SLSB PROJECTS")
-        slal_jsons_dir = working_dir + '\\SLAnims\\json'
-        for filename in os.listdir(slal_jsons_dir):
-            path = os.path.join(slal_jsons_dir, filename)
-            if os.path.isfile(path) and filename.lower().endswith(".json"):
-                Arguments.debug('converting', filename)
-                output = subprocess.Popen(f"{Arguments.slsb_path} convert --in \"{path}\" --out \"{Arguments.temp_dir}\"", stdout=subprocess.PIPE).stdout.read()
+        for json_path in slal_jsons_dir.glob('*.json'):
+            Arguments.debug(f"converting {json_path.name}")
+            input_command:list[str] = [str(Arguments.slsb_path), 'convert', '--in', str(json_path), '--out', str(Arguments.temp_dir)]
+            result = subprocess.run(input_command, capture_output=True, text=True, check=True)
+            #Arguments.debug(result.stdout)
 
         Arguments.debug("---------> EDITING OUTPUT SLSB PROJECTS")
-        PackageProcessor.edit_slsb_json(out_dir)
-        # Building SLRs for edited SLSB Project
-        for filename in os.listdir(Arguments.temp_dir):
-            path = os.path.join(Arguments.temp_dir, filename)
-            if os.path.isdir(path):
-                continue
-            edited_path = Arguments.temp_dir + '/edited/' + filename
-            output = subprocess.Popen(f"{Arguments.slsb_path} build --in \"{edited_path}\" --out \"{out_dir}\"", stdout=subprocess.PIPE).stdout.read()
-            shutil.copyfile(edited_path, out_dir + '/SKSE/Sexlab/Registry/Source/' + filename)
+        PackageProcessor.edit_slsb_json()
+        for tmp_json_path in temp_edit_dir.glob('*.slsb.json'):
+            input_command:list[str] = [str(Arguments.slsb_path), 'build', '--in', str(tmp_json_path), '--out', str(module_out_path)]
+            result = subprocess.run(input_command, capture_output=True, text=True, check=True)
+            target_project_path = slsb_project_dir/tmp_json_path.name
+            shutil.copy2(tmp_json_path, target_project_path)
 
-        slsb_fnis_list_dir = out_dir + '\\meshes\\actors'
-        ConvertUtils.iter_fnis_lists(slsb_fnis_list_dir,'', Editors.edit_output_fnis)
-        if not Arguments.no_build and Arguments.fnis_path is not None:
-            Arguments.debug("---------> BUILDING FNIS BEHAVIOUR")
-            ConvertUtils.iter_fnis_lists(slsb_fnis_list_dir, out_dir, ConvertUtils.build_behaviour)
-
-        shutil.rmtree(Arguments.temp_dir)
-        if Arguments.remove_anims:
-            for d in StoredData.anim_cleanup_dirs:
-                ConvertUtils.do_remove_anims(d)
-
+        slsb_fnis_list_dir:Path = module_out_path/'meshes'/'actors'
+        ConvertUtils.iter_fnis_lists(slsb_fnis_list_dir, None, Editors.edit_output_fnis)
+        try:
+            if Arguments.skyrim_path and not Arguments.no_build:
+                ConvertUtils.hardlink_hkx_files(module_out_path)
+                Arguments.debug("---------> BUILDING FNIS BEHAVIOUR")
+                ConvertUtils.iter_fnis_lists(slsb_fnis_list_dir, module_out_path, ConvertUtils.build_behaviors)
+        finally:
+            #perform essential cleanups
+            if Arguments.remove_anims:
+                ConvertUtils.cleanup_hkx_hardlinks()
+            StoredData.reset_stored_data()
+            shutil.rmtree(Arguments.temp_dir)
 
     @staticmethod
     def do_convert_bulk():
-        for dir_name in os.listdir(Arguments.parent_dir):
-            if dir_name.startswith("!"):
+        SLAnims_Paths:list[Path] = list(Arguments.parent_dir.rglob('SLAnims'))
+        if not SLAnims_Paths:
+                Arguments.debug("\033[91m\n[ERROR] No 'SLAnims' folders found inside the input directory. Please populate 'SLAL_Packs' with SLAL modules first.\033[0m")
+                return
+        for SLAnims_Path in SLAnims_Paths:
+            slal_module_path:Path = SLAnims_Path.parent
+            if slal_module_path.name.startswith('!') or slal_module_path.parent.name.startswith('!'):
                 continue
-            dir_path = os.path.join(Arguments.parent_dir, dir_name)
-            if os.path.isdir(dir_path):
-                slal_dir_default = os.path.join(dir_path, 'SLAnims')            
-                if os.path.exists(slal_dir_default):
-                    Arguments.debug('\n\033[92m' + "============== PROCESSING " + dir_name + " ==============" + '\033[0m')
-                    ConvertMain.do_convert_single(Arguments.parent_dir, dir_name)
-
-    @staticmethod
-    def check_wrong_dir_structure():
-        slal_dir_outside = os.path.join(Arguments.parent_dir, 'SLAnims')
-        if os.path.exists(slal_dir_outside):
-            Arguments.debug('\033[91m' + "[ERROR] Found 'SLAnims' folder directly inside the provided path. No packs outside a sub-directory will be processed for conversion." + '\033[0m')
-            Arguments.debug('\033[92m' + "[SOLUTION] Each SLAL pack has to be in its own sub-directory, even when converting a single pack." + '\033[0m')
-        misplaced_slal_packs = []
-        for item in os.listdir(Arguments.parent_dir):
-            if item.startswith("!"):
+            if slal_module_path in StoredData.processed_slal_modules:
                 continue
-            item_path = os.path.join(Arguments.parent_dir, item)
-            if os.path.isdir(item_path):
-                slal_dir_default = os.path.join(item_path, 'SLAnims')            
-                if not os.path.exists(slal_dir_default):
-                    for sub_item in os.listdir(item_path):
-                        sub_item_path = os.path.join(item_path, sub_item)
-                        if os.path.isdir(sub_item_path):
-                            slal_dir_inside = os.path.join(sub_item_path, 'SLAnims')
-                            if os.path.exists(slal_dir_inside):
-                                misplaced_slal_packs.append(sub_item_path)
-        if misplaced_slal_packs:
-            Arguments.debug('\n\033[93m' + "[WARNING] Found at least one sub-directory having a standalone SLAL pack inside a sub-directory in the provided path. The pack in this sub-sub-directory will not be processed for conversion." + '\033[0m')
-            for entry in misplaced_slal_packs:
-                Arguments.debug(f"- {entry}")
-            Arguments.debug('\033[92m' + "SOLUTION: If you want these packs to also be processed for conversion, make sure they appear as direct sub-directories inside the provided path." + '\033[0m')
+            if any(p.name == slal_module_path.name for p in StoredData.processed_slal_modules):
+                Arguments.debug(f"\n\033[91m[ERROR]: Detected conflicting module titled '{slal_module_path.name}' in {slal_module_path} for an already processed module. Skipped to prevent output overwriting.\033[0m")
+                continue
+            ConvertMain.do_convert_single(slal_module_path)
+            StoredData.processed_slal_modules.add(slal_module_path)
 
 #############################################################################################
 class PostConversion: # HANDLES XMLs WITH SPACES (FOR ANUBS AND BAKA PACKS)
 
     @staticmethod
-    def replicate_structure(source_dir, required_structure):
-        for root, _, files in os.walk(source_dir):
-            for file in files:
-                source_path = os.path.join(root, file)
-
-                req_paths = []
-                for dest_root, dirs, dest_files in os.walk(required_structure):
-                    #dirs[:] = [d for d in dirs if d.lower() != "conversion"]
-                    if file in dest_files:
-                        req_paths.append(os.path.join(dest_root, file))
-
+    def replicate_structure(source_dir:Path, required_structure:Path):
+        behavior_hkx_map = {}
+        for behavior_hkx_path in required_structure.rglob('*.hkx'):
+            hkx_parent_dir = behavior_hkx_path.parent.name.lower()
+            if hkx_parent_dir == 'behaviors' or hkx_parent_dir == 'behaviors wolf':
+                relative_hkx_path = behavior_hkx_path.relative_to(required_structure)
+                behavior_hkx_map.setdefault(behavior_hkx_path.name, []).append(relative_hkx_path)
+        for tmp_hkx_path in list(source_dir.rglob('*')):
+            if not tmp_hkx_path.is_file() or tmp_hkx_path.suffix.lower() != '.hkx':
+                continue
+            if tmp_hkx_path.name in behavior_hkx_map:
+                req_paths = behavior_hkx_map[tmp_hkx_path.name]
                 if len(req_paths) > 1:
-                    Arguments.debug(f"\033[93m---> {len(req_paths)} instances found for {file}:\033[0m")
-                    Arguments.debug(req_paths)
-                    Arguments.debug("\033[93mScript is handling this, but it's undesirable. Make sure the directory with SLAL packs is not polluted. It can also hint at packaging issues by animators.\033[0m")
-
-                while req_paths:
-                    req_path = req_paths.pop(0)
-                    req_subdir = os.path.relpath(req_path, required_structure)
-                    source_structure = os.path.join(source_dir, req_subdir)
-
-                    os.makedirs(os.path.dirname(source_structure), exist_ok=True)
-                    if req_paths:
-                        shutil.copy2(source_path, source_structure)
+                    Arguments.debug(f"\033[93m---> {len(req_paths)} instances found for {tmp_hkx_path.name}:\033[0m")
+                    Arguments.debug([p.as_posix() for p in req_paths])
+                for i, req_path in enumerate(req_paths):
+                    dest_hkx_path = source_dir/req_path
+                    dest_hkx_path.parent.mkdir(parents=True, exist_ok=True)
+                    if i < len(req_paths)-1:
+                        shutil.copy2(tmp_hkx_path, dest_hkx_path)
                     else:
-                        shutil.move(source_path, source_structure)
+                        shutil.move(tmp_hkx_path, dest_hkx_path)
 
     @staticmethod
-    def move_with_replace(source_dir, target_dir):
-        if os.path.isdir(target_dir):
-            for item in os.listdir(source_dir):
-                source_item = os.path.join(source_dir, item)
-                target_item = os.path.join(target_dir, item)
-
-                if os.path.isfile(source_item):
-                    if os.path.isfile(target_item):
-                        os.remove(target_item)
-                    shutil.move(source_item, target_item)
-                    
-                elif os.path.isdir(source_item):
-                    if not os.path.isdir(target_item):
-                        os.makedirs(target_item)
-                    PostConversion.move_with_replace(source_item, target_item)
-
-            if not os.listdir(source_dir):
-                os.rmdir(source_dir)
+    def move_with_replace(source_dir:Path, target_dir:Path):
+        shutil.copytree(source_dir, target_dir, dirs_exist_ok=True, copy_function=shutil.move)
+        shutil.rmtree(source_dir)
 
     @staticmethod
     def reattempt_behaviour_gen():
-        if Arguments.tmp_log_dir is None:
+        tmp_log_path:Path = Arguments.tmp_log_dir
+        if tmp_log_path is None:
             return
-        for f in os.listdir(Arguments.tmp_log_dir):
-            if f.lower().endswith(".xml") and " " in f:
-                StoredData.xml_with_spaces.append(f)
-        if StoredData.xml_with_spaces == []:
+        for f in tmp_log_path.iterdir():
+            if f.is_file() and f.suffix.lower() == '.xml' and ' ' in f.name:
+                StoredData.xml_with_spaces.append(f.name)
+        if not StoredData.xml_with_spaces:
             return
-        
         Arguments.debug("\n======== PROCESSING XMLs_WITH_SPACES ========")
-        tmp_xml_subdir = os.path.join(Arguments.tmp_log_dir, "xml")
-        tmp_hkx_subdir = os.path.join(Arguments.tmp_log_dir, "hkx")
-        os.makedirs(tmp_xml_subdir, exist_ok=True)
-        os.makedirs(tmp_hkx_subdir, exist_ok=True)
-
+        tmp_xml_subdir = tmp_log_path/'xml'
+        tmp_hkx_subdir = tmp_log_path/'hkx'
+        tmp_xml_subdir.mkdir(parents=True, exist_ok=True)
+        tmp_hkx_subdir.mkdir(parents=True, exist_ok=True)
         Arguments.debug("---------> segregating XMLs with spaces in names")
-        for filename in os.listdir(Arguments.tmp_log_dir):
-            path = os.path.join(Arguments.tmp_log_dir, filename)
-            if os.path.isfile(path) and filename.lower().endswith(".xml") and " " in filename:
-                Arguments.debug(filename)
-                new_path = os.path.join(tmp_xml_subdir, filename)
-                shutil.move(path, new_path)
-
+        for xml_name in StoredData.xml_with_spaces:
+            org_xml_path = tmp_log_path/xml_name
+            if org_xml_path.is_file():
+                shutil.move(str(org_xml_path), str(tmp_xml_subdir/xml_name))
         Arguments.debug("---------> converting XMLs to HKXs")
-        for xml_file in os.listdir(tmp_xml_subdir):
-            if xml_file.lower().endswith(".xml"):
-                hkxcmd_path = os.path.join(Arguments.fnis_path, "hkxcmd.exe")
-                input_path = os.path.join(tmp_xml_subdir, xml_file)
-                output_file = os.path.splitext(xml_file)[0] + ".hkx"
-                output_path = os.path.join(tmp_hkx_subdir, output_file)
-                command = [hkxcmd_path, "convert", "-v:amd64", os.path.normpath(input_path), os.path.normpath(output_path)]
-                try:
-                    subprocess.run(command, check=True)
-                except:
-                    Arguments.debug(f"Failed to convert: {xml_file}")
-
-        Arguments.debug("---------> replicating source structure; stay patient...")
+        hkxcmd_path:Path = Arguments.fnis_path/'hkxcmd.exe'
+        for xml_file_path in tmp_xml_subdir.glob("*.xml"):
+            Arguments.debug(f'converting: {xml_file_path.stem}')
+            hkx_output_path:Path = tmp_hkx_subdir/xml_file_path.with_suffix('.hkx').name
+            input_command:list[str] = [str(hkxcmd_path), 'convert', '-v:amd64', str(xml_file_path), str(hkx_output_path)]
+            subprocess.run(input_command, check=True, capture_output=True)
+        Arguments.debug("---------> replicating source structure")
         PostConversion.replicate_structure(tmp_hkx_subdir, Arguments.parent_dir)
         Arguments.debug("---------> incorporating converted HKXs")
-        conversions_dir = os.path.join(Path(Arguments.parent_dir).parent, 'SLSB_Outputs', 'conversions '+Keywords.TIMESTAMP)
+        conversions_dir:Path = Arguments.parent_dir.parent/'SLSB_Outputs'/f'conversions {Keywords.TIMESTAMP}'
         PostConversion.move_with_replace(tmp_hkx_subdir, conversions_dir)
-        
-        #reset tmp_logs_dir
-        shutil.rmtree(Arguments.tmp_log_dir)
-        os.makedirs(Arguments.tmp_log_dir, exist_ok=True)
 
 #############################################################################################
 def execute_script():
@@ -1591,8 +1499,10 @@ def execute_script():
     Arguments.process_arguments()
     ConvertUtils.execute_slsb_parsers()
     ConvertMain.do_convert_bulk()
-    ConvertMain.check_wrong_dir_structure()
     PostConversion.reattempt_behaviour_gen()
+    if Arguments.tmp_log_dir.exists():
+        shutil.rmtree(Arguments.tmp_log_dir)
+        Arguments.tmp_log_dir.mkdir(parents=True, exist_ok=True)
     end_time = time.time()
     elapsed = end_time - start_time
     Arguments.debug(f'\n<<<<<<<<<<<<<<< COMPLETED SUCCESSFULLY (in {elapsed:.4f}s) >>>>>>>>>>>>>>>')
