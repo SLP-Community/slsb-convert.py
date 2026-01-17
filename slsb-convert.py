@@ -196,7 +196,7 @@ class TagsRepairer:
         TagUtils.if_then_remove(scene_tags, ['invisfurn', 'furniture'], '', 'furniture')
         # unofficial standardization
         TagUtils.if_then_add(lookup_list, ['femdom', 'amazon', 'cowgirl', 'femaledomination', 'female domination', 'leito xcross standing'], '', 'femdom')
-        TagUtils.if_then_add(lookup_list, ['basescale', 'base scale', 'setscale', 'set scale', 'bigguy'], '', 'scaling')
+        TagUtils.if_then_add(lookup_list, ['basescale', 'base scale', 'setscale', 'set scale', 'bigguy', 'bigman'], '', 'scaling')
         TagUtils.if_then_add(lookup_list, Keywords.FUTA, '', 'futa')
         TagUtils.bulk_remove(scene_tags, ['vampire', 'vampirelord']) # will be added later after special checks
         # official standard tags
@@ -909,7 +909,7 @@ class ActorUtils:
         if bigguy_value:
             if scene_pos['sex']['male']:
                 scene_pos['scale'] = round(float(bigguy_value.group(2)), 2)
-        if scaling_value:
+        elif scaling_value:
             value = round(float(scaling_value.group(2)), 2)
             if 'gs orc' in scene_name.lower() and scene_pos['sex']['male']:
                 scene_pos['scale'] = value
@@ -917,6 +917,9 @@ class ActorUtils:
                 scene_pos['scale'] = value
             if 'hcos small' in scene_name.lower() and scene_pos['race'] == 'Dragon':
                 scene_pos['scale'] = value
+        else:
+            if scene_pos['sex']['male']:
+                scene_pos['scale'] = 1.15
 
     @staticmethod
     def process_pos_leadin(scene_tags:list[str], stage_pos:dict[str,any]):
