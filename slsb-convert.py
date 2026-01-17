@@ -117,7 +117,7 @@ class StoredData:
     slal_jsons_data:ClassVar[dict] = {}
     source_txts_data:ClassVar[dict] = {}
     slal_fnislists_data:ClassVar[dict] = {}
-    unique_animlist_options:ClassVar[list[str]|str] = []
+    unique_animlist_options:ClassVar[dict] = {}
     anim_cleanup_dirs:ClassVar[set] = set()
     created_hardlinks:ClassVar[list[str]|str] = []
     #actor-stage-specific mutable
@@ -650,7 +650,7 @@ class Parsers:
             anim_objects:list[str] = []
 
             for i, split in enumerate(splits):
-                if len(split) == 1:
+                if len(split) <= 1:
                     continue
                 elif split.startswith('-'):
                     options_list = split[1:].split(',')
@@ -667,7 +667,7 @@ class Parsers:
             if not anim_file_name or not anim_event_name:
                 continue
             if options:
-                StoredData.unique_animlist_options.extend([anim_file_name, options])
+                StoredData.unique_animlist_options[anim_file_name] = options
             
             anim_file_path:Path = list_parent_path/anim_file_name
             meshes_dir_idx = next(i for i, part in enumerate(anim_file_path.parts) if part.lower() == 'meshes')
@@ -795,27 +795,23 @@ class Editors:
         list_path:Path = list_parent_path/list_name
         data_strean:TextIO = list_path.read_text(encoding='utf-8').splitlines()
         modified_lines = []
-        opt_insert_map = {
-            "b": lambda opt: f"b -{opt}",
-            "-o": lambda opt: f"-o,{opt}",
-            "-a,tn": lambda opt: f"-a,tn,{opt}",
-            "-o,a,tn": lambda opt: f"-o,a,tn,{opt}"
-        }
         for line in data_strean:
             if not line.strip():
                 modified_lines.append(line)
                 continue
             splits = line.split()
-            line_changed = False
             for i, split in enumerate(splits):
-                if split in StoredData.unique_animlist_options:     # (split==anim_file_name)
-                    idx = StoredData.unique_animlist_options.index(split)
-                    options = ",".join(StoredData.unique_animlist_options[idx+1])
+                if i >= 2 and '.hkx' in split.lower(): 
                     opt_inset_point = splits[i-2]
-                    if opt_inset_point in opt_insert_map:
-                        splits[i-2] = opt_insert_map[opt_inset_point](options)
-                        line_changed = True
-            modified_lines.append(" ".join(splits) if line_changed else line)
+                    options_to_add:list[str] = StoredData.unique_animlist_options.get(split, [])
+                    options_str:str = ','.join(options_to_add)
+                    if options_str:
+                        if opt_inset_point == 'b':
+                            splits[i-2] = f'b -{options_str}'
+                        elif opt_inset_point.startswith('-'):
+                            splits[i-2] = f'{opt_inset_point},{options_str}'
+
+            modified_lines.append(" ".join(splits))
 
         list_path.write_text("\n".join(modified_lines) + "\n", encoding='utf-8')
 
