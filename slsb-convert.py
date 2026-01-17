@@ -804,6 +804,7 @@ class Editors:
                 if i >= 2 and '.hkx' in split.lower(): 
                     opt_inset_point = splits[i-2]
                     options_to_add:list[str] = StoredData.unique_animlist_options.get(split, [])
+                    options_to_add.append('md') #Test: Reduces unit cost of SLSB Idles/AnimEvents
                     options_str:str = ','.join(options_to_add)
                     if options_str:
                         if opt_inset_point == 'b':
