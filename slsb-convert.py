@@ -137,85 +137,100 @@ class StoredData:
 class TagUtils:
 
     @staticmethod
-    def if_any_found(tags:list[str], _any:list[str]|str, *extra_any:Iterable) -> False:
-        if isinstance(_any, str):
-            _any = [_any]
-        if _any and any(item in tags for item in _any) or any(item in extra_check for extra_check in extra_any for item in _any):
+    def if_any_found(tags:list[str], _any:list[str]|str, *extra_any:Iterable) -> bool:
+        if isinstance(_any, str): _any = [_any]
+        if isinstance(extra_any, str): extra_any = [extra_any]
+        tags_str:str = ";".join(tags)
+        if any(k in tags_str for k in _any):
             return True
+        for extra_check in extra_any:
+            extra_str: str = ";".join(map(str, extra_check))
+            if any(k in extra_str for k in _any):
+                return True
         return False
     @staticmethod
-    def if_then_add(tags:list[str], _any:list[str]|str, not_any:list[str]|str, add:str) -> None:
-        if add not in tags and TagUtils.if_any_found(tags, _any) and not TagUtils.if_any_found(tags, not_any):
+    def if_then_add(tags:list[str], lookup:list[str]|str, _any:list[str]|str, not_any:list[str]|str, add:str):
+        if add not in tags and TagUtils.if_any_found(tags, _any, lookup) and (not not_any or not TagUtils.if_any_found(tags, not_any)):
             tags.append(add)
     @staticmethod
-    def if_in_then_add(tags:list[str], _list:list[str], _any:list[str]|str, add:str) -> None:
+    def if_in_then_add(tags:list[str], _list:list[str], _any:list[str]|str, add:str):
         if add not in tags and TagUtils.if_any_found(_list, _any):
             tags.append(add)
     @staticmethod
-    def if_then_remove(tags:list[str], all_in_tags:list[str], any_not_in_tags:list[str], remove:str) -> None:
+    def if_then_remove(tags:list[str], all_in_tags:list[str], any_not_in_tags:list[str], remove:str):
         if remove in tags and all(item in tags for item in all_in_tags) and not TagUtils.if_any_found(tags, any_not_in_tags):
             tags.remove(remove)
     @staticmethod
-    def if_then_replace(tags:list[str], remove:str, add:str) -> None:
+    def if_then_replace(tags:list[str], remove:str, add:str):
         if remove in tags:
             tags.remove(remove)
             if add not in tags:
                 tags.append(add)
     @staticmethod
-    def bulk_add(tags:list[str], add:list[str]|str) -> None:
+    def bulk_add(tags:list[str], add:list[str]|str):
         if isinstance(add, str):
             add = [add]
         for item in add:
             if item and item not in tags:
                 tags.append(item)
     @staticmethod
-    def bulk_remove(tags:list[str], remove:list[str]|str) -> None:
+    def bulk_remove(tags:list[str], remove:list[str]|str):
         if isinstance(remove, str):
             remove = [remove]
         for item in remove:
             if item in tags:
                 tags.remove(item)
+    @staticmethod
+    def remove_similar(tags: list[str]):
+        seen = set()
+        unique_tags = []
+        for tag in tags:
+            if tag not in seen:
+                unique_tags.append(tag)
+                seen.add(tag)
+        tags[:] = unique_tags
 
 #############################################################################################
 class TagsRepairer:
 
     @staticmethod
-    def update_scene_tags(scene_name:str, scene_tags:list[str], anim_dir_name:str, event_name:str) -> None:
-        lookup_list:list[str] = scene_tags + [scene_name.lower(), anim_dir_name.lower(), event_name.lower()]
+    def update_scene_tags(scene_name:str, tags:list[str], anim_dir_name:str, event_name:str):
+        lookup:list[str] = [scene_name.lower(), anim_dir_name.lower(), event_name.lower()]
         # tags corrections
-        TagUtils.if_then_add(lookup_list, ['laying'], ['eggs', 'egg'], 'lying')
-        TagUtils.if_then_remove(scene_tags, ['laying', 'lying'], ['eggs', 'egg'], 'laying')
-        TagUtils.if_then_replace(scene_tags, 'invfurn', 'invisfurn')
-        TagUtils.if_then_replace(scene_tags, 'invisible obj', 'invisfurn')
-        TagUtils.if_then_replace(scene_tags, 'cunnilingius', 'cunnilingus')
-        TagUtils.if_then_replace(scene_tags, 'agressive', 'aggressive')
-        TagUtils.if_then_replace(scene_tags, 'femodm', 'femdom')
+        TagUtils.if_then_add(tags,lookup, ['laying'], ['eggs', 'egg'], 'lying')
+        TagUtils.if_then_remove(tags, ['laying', 'lying'], ['eggs', 'egg'], 'laying')
+        TagUtils.if_then_replace(tags, 'invfurn', 'invisfurn')
+        TagUtils.if_then_replace(tags, 'invisible obj', 'invisfurn')
+        TagUtils.if_then_replace(tags, 'cunnilingius', 'cunnilingus')
+        TagUtils.if_then_replace(tags, 'agressive', 'aggressive')
+        TagUtils.if_then_replace(tags, 'femodm', 'femdom')
         # furniture tags
-        TagUtils.if_then_add(lookup_list, ['inv'], '', 'invisfurn')
-        TagUtils.if_then_add(lookup_list, Keywords.FURNITURE, '', 'furniture')
-        TagUtils.if_then_remove(scene_tags, ['invisfurn', 'furniture'], '', 'furniture')
+        TagUtils.if_then_add(tags,lookup, ['inv'], '', 'invisfurn')
+        TagUtils.if_then_add(tags,lookup, Keywords.FURNITURE, '', 'furniture')
+        TagUtils.if_then_remove(tags, ['invisfurn', 'furniture'], '', 'furniture')
         # unofficial standardization
-        TagUtils.if_then_add(lookup_list, ['femdom', 'amazon', 'cowgirl', 'femaledomination', 'female domination', 'leito xcross standing'], '', 'femdom')
-        TagUtils.if_then_add(lookup_list, ['basescale', 'base scale', 'setscale', 'set scale', 'bigguy', 'bigman'], '', 'scaling')
-        TagUtils.if_then_add(lookup_list, Keywords.FUTA, '', 'futa')
-        TagUtils.bulk_remove(scene_tags, ['vampire', 'vampirelord']) # will be added later after special checks
+        TagUtils.if_then_add(tags,lookup, ['femdom', 'amazon', 'cowgirl', 'femaledomination', 'female domination', 'leito xcross standing'], '', 'femdom')
+        TagUtils.if_then_add(tags,lookup, ['basescale', 'base scale', 'setscale', 'set scale', 'bigguy', 'bigman'], '', 'scaling')
+        TagUtils.if_then_add(tags,lookup, Keywords.FUTA, '', 'futa')
+        TagUtils.bulk_remove(tags, ['vampire', 'vampirelord']) # will be added later after special checks
         # official standard tags
-        TagUtils.if_then_add(lookup_list, ['mage', 'staff', 'alteration', 'rune', 'magicdildo', 'magick'], '', 'magic')
-        TagUtils.if_then_add(lookup_list, ['dp', 'doublepen'], '', 'doublepenetration')
-        TagUtils.if_then_add(lookup_list, ['tp', 'triplepen'], '', 'triplepenetration')
-        TagUtils.if_then_add(lookup_list, ['guro', 'execution'], '', 'gore')
-        TagUtils.if_then_add(lookup_list, ['choke', 'choking'], '', 'asphyxiation')
-        TagUtils.if_then_add(lookup_list, ['titfuck', 'tittyfuck'], '', 'boobjob')
-        TagUtils.if_then_add(lookup_list, ['trib', 'tribbing'], '', 'tribadism')
-        TagUtils.if_then_add(lookup_list, ['doggystyle', 'doggy'], '', 'doggy')
-        TagUtils.if_then_add(lookup_list, ['facesit'], '', 'facesitting')
-        TagUtils.if_then_add(lookup_list, ['lotus'], '', 'lotusposition')
-        TagUtils.if_then_add(lookup_list, ['spank'], '', 'spanking')
-        TagUtils.if_then_add(lookup_list, ['rimjob'], '', 'rimming')
-        TagUtils.if_then_add(lookup_list, ['kiss'], '', 'kissing')
-        TagUtils.if_then_add(lookup_list, ['hold'], '', 'holding')
-        TagUtils.if_then_add(lookup_list, ['69'], '', 'sixtynine')
-        TagUtils.bulk_remove(scene_tags, '')
+        TagUtils.if_then_add(tags,lookup, ['mage', 'staff', 'alteration', 'rune', 'magicdildo', 'magic'], '', 'magic')
+        TagUtils.if_then_add(tags,lookup, ['dp', 'doublepen'], '', 'doublepenetration')
+        TagUtils.if_then_add(tags,lookup, ['tp', 'triplepen'], '', 'triplepenetration')
+        TagUtils.if_then_add(tags,lookup, ['guro', 'execution'], '', 'gore')
+        TagUtils.if_then_add(tags,lookup, ['choke', 'choking'], '', 'asphyxiation')
+        TagUtils.if_then_add(tags,lookup, ['titfuck', 'tittyfuck'], '', 'boobjob')
+        TagUtils.if_then_add(tags,lookup, ['trib', 'tribbing'], '', 'tribadism')
+        TagUtils.if_then_add(tags,lookup, ['doggystyle', 'doggy'], '', 'doggy')
+        TagUtils.if_then_add(tags,lookup, ['facesit'], '', 'facesitting')
+        TagUtils.if_then_add(tags,lookup, ['lotus'], '', 'lotusposition')
+        TagUtils.if_then_add(tags,lookup, ['spank'], '', 'spanking')
+        TagUtils.if_then_add(tags,lookup, ['rimjob'], '', 'rimming')
+        TagUtils.if_then_add(tags,lookup, ['kiss'], '', 'kissing')
+        TagUtils.if_then_add(tags,lookup, ['hold'], '', 'holding')
+        TagUtils.if_then_add(tags,lookup, ['69'], '', 'sixtynine')
+        TagUtils.remove_similar(tags)
+        TagUtils.bulk_remove(tags, '')
 
     @staticmethod
     def fix_submissive_tags(scene_name:str, scene_tags:list[str], anim_dir_name:str) -> None:
@@ -374,9 +389,9 @@ class SLATE:
         TagUtils.if_in_then_add(stage_tags, rimtags, ['svp', 'fvp', 'sdv', 'fdv', 'scg', 'fcg', 'sdp', 'fdp'], 'vaginal')
         TagUtils.if_in_then_add(stage_tags, rimtags, ['sap', 'fap', 'sda', 'fda', 'sac', 'fac', 'sdp', 'fdp'], 'anal')
         if 'blowjob' in stage_tags:
-            TagUtils.if_then_add(stage_tags, 'vaginal', 'anal', 'spitroast')
-            TagUtils.if_then_add(stage_tags, 'anal', 'vaginal', 'spitroast')
-            TagUtils.if_then_add(stage_tags, ['vaginal', 'anal'], '', 'triplepenetration')
+            TagUtils.if_then_add(stage_tags,'', 'vaginal', 'anal', 'spitroast')
+            TagUtils.if_then_add(stage_tags,'', 'anal', 'vaginal', 'spitroast')
+            TagUtils.if_then_add(stage_tags,'', ['vaginal', 'anal'], '', 'triplepenetration')
         if 'sdp' in rimtags or 'fdp' in rimtags:
             TagUtils.bulk_add(stage_tags, 'doublepenetration')
         TagUtils.if_in_then_add(stage_tags, rimtags, ['fst','bst','fvp','fap','fcg','fac','fdp','fdv','fda','fhj','ftf','fmf','ffj','fbj'], 'rimfast')
@@ -415,8 +430,8 @@ class SLATE:
     @staticmethod
     def implement_asl_tags(scene_tags:list[str], stage_tags:list[str], asltags:list[str]):
         # stores info on vaginal/anal tag presence (for spitroast)
-        TagUtils.if_then_add(scene_tags, 'anal', 'vaginal', 'sranaltmp')
-        TagUtils.if_then_add(scene_tags, 'vaginal', 'anal', 'srvagtmp')
+        TagUtils.if_then_add(scene_tags,'', 'anal', 'vaginal', 'sranaltmp')
+        TagUtils.if_then_add(scene_tags,'', 'vaginal', 'anal', 'srvagtmp')
         # removes all scene tags that would be added by ASL
         TagUtils.bulk_remove(scene_tags, ['leadin', 'oral', 'vaginal', 'anal', 'spitroast', 'doublepenetration', 'triplepenetration'])
         if not 'rimtagged' in scene_tags:
@@ -460,18 +475,18 @@ class SLATE:
 
     @staticmethod
     def implement_position_tags(pos_tags:list[str]):
-        TagUtils.if_then_add(pos_tags, 'ldi', '', 'LeadIn')
-        TagUtils.if_then_add(pos_tags, 'kis', '', 'bKissing')
-        TagUtils.if_then_add(pos_tags, ['sst', 'fst', 'bst'], '', 'pStimulation')
-        TagUtils.if_then_add(pos_tags, ['shj', 'fhj'], '', 'pHandJob')
-        TagUtils.if_then_add(pos_tags, ['sfj', 'ffj'], '', 'pFootJob')
-        TagUtils.if_then_add(pos_tags, ['stf', 'ftf'], '', 'pBoobJob')
-        TagUtils.if_then_add(pos_tags, ['cun', 'sbj', 'fbj'], '', 'aOral')
-        TagUtils.if_then_add(pos_tags, ['smf', 'fmf'], '', 'pOral')
-        TagUtils.if_then_add(pos_tags, ['sdv', 'fdv'], '', 'aVaginal')
-        TagUtils.if_then_add(pos_tags, ['svp', 'fvp', 'scg', 'fcg', 'sdp', 'fdp'], '', 'pVaginal')
-        TagUtils.if_then_add(pos_tags, ['sda', 'fda'], '', 'aAnal')
-        TagUtils.if_then_add(pos_tags, ['sap', 'fap', 'sac', 'fac', 'sdp', 'fdp'], '', 'pAnal')
+        TagUtils.if_then_add(pos_tags,'', 'ldi', '', 'LeadIn')
+        TagUtils.if_then_add(pos_tags,'', 'kis', '', 'bKissing')
+        TagUtils.if_then_add(pos_tags,'', ['sst', 'fst', 'bst'], '', 'pStimulation')
+        TagUtils.if_then_add(pos_tags,'', ['shj', 'fhj'], '', 'pHandJob')
+        TagUtils.if_then_add(pos_tags,'', ['sfj', 'ffj'], '', 'pFootJob')
+        TagUtils.if_then_add(pos_tags,'', ['stf', 'ftf'], '', 'pBoobJob')
+        TagUtils.if_then_add(pos_tags,'', ['cun', 'sbj', 'fbj'], '', 'aOral')
+        TagUtils.if_then_add(pos_tags,'', ['smf', 'fmf'], '', 'pOral')
+        TagUtils.if_then_add(pos_tags,'', ['sdv', 'fdv'], '', 'aVaginal')
+        TagUtils.if_then_add(pos_tags,'', ['svp', 'fvp', 'scg', 'fcg', 'sdp', 'fdp'], '', 'pVaginal')
+        TagUtils.if_then_add(pos_tags,'', ['sda', 'fda'], '', 'aAnal')
+        TagUtils.if_then_add(pos_tags,'', ['sap', 'fap', 'sac', 'fac', 'sdp', 'fdp'], '', 'pAnal')
     @staticmethod
     def implement_slate_tags(scene_tags:list[str], stage_tags:list[str], stage_num:int, stage_positions:list[dict]):
         if StoredData.cached_variables["action_logs_found"]:
