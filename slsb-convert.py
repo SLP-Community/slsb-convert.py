@@ -793,12 +793,6 @@ class Editors:
                 slal_json_path.write_text(content, encoding='utf-8')
 
     @staticmethod
-    def fix_slsb_event_names(stage_pos:dict[str,any], event_name:str):
-        if event_name and event_name in StoredData.slal_fnislists_data.keys():
-            required_info = StoredData.slal_fnislists_data[event_name]
-            stage_pos['event'][0] = Path(required_info['anim_file_name']).stem
-
-    @staticmethod
     def edit_output_fnis(list_parent_path:Path, list_name:str, list_out_path:Path|None):
         list_path:Path = list_parent_path/list_name
         data_strean:TextIO = list_path.read_text(encoding='utf-8').splitlines()
@@ -810,6 +804,12 @@ class Editors:
             splits = line.split()
             for i, split in enumerate(splits):
                 if i >= 2 and '.hkx' in split.lower(): 
+                    # Fix AnimFileName
+                    event_name = splits[i-1][4:].lower()
+                    if event_name and event_name in StoredData.slal_fnislists_data.keys():
+                        required_info = StoredData.slal_fnislists_data[event_name]
+                        splits[i] = required_info['anim_file_name']
+                    # Fix Options
                     opt_inset_point = splits[i-2]
                     options_to_add:list[str] = StoredData.unique_animlist_options.get(split, [])
                     options_to_add.append('md') #Test: Reduces unit cost of SLSB Idles/AnimEvents
@@ -1152,7 +1152,6 @@ class PackageProcessor:
             event_name:str|None = None
             if stage_pos['event'] and len(stage_pos['event']) > 0:
                 event_name = stage_pos['event'][0].lower()
-            Editors.fix_slsb_event_names(stage_pos, event_name)
             ActorUtils.process_pos_animobjects(stage_pos, event_name)
             ParamUtils.incorporate_slal_json_data(scene_name, [], [], stage_pos, stage_num, pos_num, 'Stage')
             #ActorUtils.process_pos_leadin(scene_tags, stage_pos)
