@@ -79,6 +79,7 @@ class Keywords:
     FEM_CRE_BODY_ONLY:list[str] = ['Chicken', 'Goat', 'Cow', 'Seeker', 'Wispmother', 'Hagraven', 'Spriggan', 'Flame Atronach']
     HENTAIRIM_TAGS:list[str] = ['kissing', 'stimulation', 'handjob', 'footjob', 'boobjob', 'blowjob', 'cunnilingus', 'oral',
         'cowgirl', 'vaginal', 'anal', 'spitroast', 'doublepenetration', 'triplepenetration']
+    ASL_TAGS:list[str] = ['oral', 'vaginal', 'anal', 'spitroast', 'doublepenetration', 'triplepenetration']
     FURNITURE:list[str] = ['alchemywb', 'bed', 'bench', 'cage', 'chair', 'coffin', 'counter', 'couch', 'desk', 'doublebed', 'doublebeds', 'drawer',
         'dwemerchair', 'enchantingwb', 'furn', 'furotub', 'gallows', 'haybale', 'javtable', 'lowtable', 'necrochair', 'pillory', 'pillorylow',
         'pole', 'rpost', 'shack', 'sofa', 'spike', 'table', 'throne', 'torturerack', 'tub', 'wall', 'wheel', 'woodenpony', 'workbench', 'xcross']
@@ -313,12 +314,10 @@ class SLATE:
                 if scene_name.lower() == entry['anim'].lower():
                     if entry['action'].lower() == 'addtag':
                         TagToAdd = entry['tag'].lower()
-                        if TagToAdd not in scene_tags:
-                            scene_tags.append(TagToAdd)
+                        TagUtils.bulk_add(scene_tags, TagToAdd)
                     elif entry['action'].lower() == 'removetag':
                         TagToRemove = entry['tag'].lower()
-                        if TagToRemove in scene_tags:
-                            scene_tags.remove(TagToRemove)
+                        TagUtils.bulk_remove(scene_tags, TagToRemove)
 
     @staticmethod
     def check_hentairim_tags(scene_tags:list[str], stage_tags:list[str], stage_num:int, pos_ind:str) -> None:
@@ -373,7 +372,7 @@ class SLATE:
 
     @staticmethod
     def implement_hentairim_tags(scene_tags:list[str], stage_tags:list[str], rimtags:list[str]):
-        TagUtils.bulk_add(scene_tags, ['rimtagged'])
+        TagUtils.bulk_add(scene_tags, ['postagged'])
         # removes all stage tags that would be added by HentaiRim
         TagUtils.bulk_remove(scene_tags, [Keywords.HENTAIRIM_TAGS, 'leadin'])
         # each stage tagged differently based on HentaiRim interactions
@@ -394,8 +393,8 @@ class SLATE:
             TagUtils.if_then_add(stage_tags,'', ['vaginal', 'anal'], '', 'triplepenetration')
         if 'sdp' in rimtags or 'fdp' in rimtags:
             TagUtils.bulk_add(stage_tags, 'doublepenetration')
-        TagUtils.if_in_then_add(stage_tags, rimtags, ['fst','bst','fvp','fap','fcg','fac','fdp','fdv','fda','fhj','ftf','fmf','ffj','fbj'], 'rimfast')
-        TagUtils.if_in_then_add(stage_tags, rimtags, ['sst','svp','sap','scg','sac','sdp','sdv','sda','shj','stf','smf','sfj','kis','cun','sbj'], 'rimslow')
+        TagUtils.if_in_then_add(stage_tags, rimtags, ['fst','bst','fvp','fap','fcg','fac','fdp','fdv','fda','fhj','ftf','fmf','ffj','fbj'], 'posfast')
+        TagUtils.if_in_then_add(stage_tags, rimtags, ['sst','svp','sap','scg','sac','sdp','sdv','sda','shj','stf','smf','sfj','kis','cun','sbj'], 'posslow')
         if not TagUtils.if_any_found(stage_tags, Keywords.HENTAIRIM_TAGS):
             TagUtils.bulk_add(stage_tags, 'leadin')
 
@@ -429,12 +428,12 @@ class SLATE:
 
     @staticmethod
     def implement_asl_tags(scene_tags:list[str], stage_tags:list[str], asltags:list[str]):
-        # stores info on vaginal/anal tag presence (for spitroast)
-        TagUtils.if_then_add(scene_tags,'', 'anal', 'vaginal', 'sranaltmp')
-        TagUtils.if_then_add(scene_tags,'', 'vaginal', 'anal', 'srvagtmp')
-        # removes all scene tags that would be added by ASL
-        TagUtils.bulk_remove(scene_tags, ['leadin', 'oral', 'vaginal', 'anal', 'spitroast', 'doublepenetration', 'triplepenetration'])
-        if not 'rimtagged' in scene_tags:
+        if not 'postagged' in scene_tags:
+            # stores info on vaginal/anal tag presence (for spitroast)
+            TagUtils.if_then_add(scene_tags,'', 'anal', 'vaginal', 'sranaltmp')
+            TagUtils.if_then_add(scene_tags,'', 'vaginal', 'anal', 'srvagtmp')
+            # removes all scene tags that would be added by ASL
+            TagUtils.bulk_remove(scene_tags, [Keywords.ASL_TAGS, 'leadin'])
             # each stage tagged differently based on ASL interactions
             TagUtils.if_in_then_add(stage_tags, asltags, ['li'], 'leadin')
             TagUtils.if_in_then_add(stage_tags, asltags, ['sb', 'fb'], 'oral')
@@ -448,9 +447,9 @@ class SLATE:
                 TagUtils.bulk_add(stage_tags, ['doublepenetration', 'vaginal', 'anal'])
             if 'tp' in asltags:
                 TagUtils.bulk_add(stage_tags, ['triplepenetration', 'oral', 'vaginal', 'anal'])
-            TagUtils.if_in_then_add(stage_tags, asltags, ['sb','sv','sa'], 'rimslow')
-            TagUtils.if_in_then_add(stage_tags, asltags, ['fb','fv','fa'], 'rimfast')
-        TagUtils.bulk_remove(scene_tags, ['sranaltmp', 'srvagtmp'])
+            TagUtils.if_in_then_add(stage_tags, asltags, ['sb','sv','sa'], 'posslow')
+            TagUtils.if_in_then_add(stage_tags, asltags, ['fb','fv','fa'], 'posfast')
+            TagUtils.bulk_remove(scene_tags, ['sranaltmp', 'srvagtmp'])
 
     @staticmethod
     def correct_aslsfx_tags(scene_tags:list[str], stage_tags:list[str],  stage_num:int):
@@ -487,6 +486,7 @@ class SLATE:
         TagUtils.if_then_add(pos_tags,'', ['svp', 'fvp', 'scg', 'fcg', 'sdp', 'fdp'], '', 'pVaginal')
         TagUtils.if_then_add(pos_tags,'', ['sda', 'fda'], '', 'aAnal')
         TagUtils.if_then_add(pos_tags,'', ['sap', 'fap', 'sac', 'fac', 'sdp', 'fdp'], '', 'pAnal')
+
     @staticmethod
     def implement_slate_tags(scene_tags:list[str], stage_tags:list[str], stage_num:int, stage_positions:list[dict]):
         if StoredData.cached_variables["action_logs_found"]:
@@ -872,8 +872,6 @@ class ActorUtils:
             if TagUtils.if_any_found(sub_tags, ['unconscious', 'gore', 'amputee']) and scene_pos['submissive']:
                 scene_pos['submissive'] = False
                 scene_pos['dead'] = True
-            #if 'billyy' in tags and 'cf' in tags and scene_pos['submissive']:
-            #   scene_pos['submissive'] = False
 
     @staticmethod
     def process_pos_flag_futa_2(scene_tags:list[str], scene_pos:dict[str,any], pos_num:int, actor_key:str):
@@ -1076,7 +1074,6 @@ class ParamUtils:
 
                 if 'timer' in source_stage_params and source_stage_params['timer'] != 0:
                     if int(stage_params_key[6:]) == stage_num:
-                        #fixed_length = round(float(source_stage_params['timer']), 2)
                         fixed_length = round(float(source_stage_params['timer']) * 1000) #timers in miliseconds
                         stage['extra']['fixed_len'] = fixed_length
 
@@ -1163,6 +1160,23 @@ class PackageProcessor:
         #-----------------
 
     @staticmethod
+    def process_position_combined(scene_positions:list[dict], stages:list[dict], is_sub_scene:bool):
+        # This function exists owing to separation of position info in SLR v4 to stage and scene levels.
+        StageUtils.update_pos_counts(scene_positions)
+        stages_conunt:int = len(stages)
+        for i in range(stages_conunt):
+            stage_num:int = i
+            stage:dict[str,any] = stages[stage_num]
+            stage_tags:list[str] = stage['tags']
+            stage_positions:list[dict] = stage['positions']
+            pos_length:int = len(stage_positions)
+            for i in range(pos_length):
+                pos_num:int = i
+                stage_pos:dict[str,any] = stage_positions[pos_num]
+                scene_pos:dict[str,any] = scene_positions[pos_num]
+                #// DO_SOMETHING
+
+    @staticmethod
     def process_scene(scene:dict[str,any], anim_dir_name:str):
         scene_name:str = scene['name']
         stages:list[dict] = scene['stages']
@@ -1209,6 +1223,7 @@ class PackageProcessor:
 
         TagsRepairer.fix_toys_tag(scene_tags, anim_obj_found)
         StageUtils.process_scene_furniture(scene_name, scene_tags, furniture, pos_length, anim_obj_found)
+        PackageProcessor.process_position_combined(scene_positions, stages, is_sub_scene) 
 
         # marks scenes as private (for manual conversion)
         if anim_dir_name == 'ZaZAnimsSLSB' or anim_dir_name == 'DDSL': #or anim_dir_name == 'EstrusSLSB'
