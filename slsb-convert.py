@@ -138,16 +138,19 @@ class StoredData:
 class TagUtils:
 
     @staticmethod
-    def if_any_found(tags:list[str], _any:list[str]|str, *extra_any:Iterable) -> bool:
+    def if_any_found(tags:list[str], _any:list[str]|str, *extra_any:Iterable|str) -> bool:
         if isinstance(_any, str): _any = [_any]
-        if isinstance(extra_any, str): extra_any = [extra_any]
         tags_str:str = ";".join(tags)
         if any(k in tags_str for k in _any):
             return True
+        extra_str = ""
         for extra_check in extra_any:
-            extra_str: str = ";".join(map(str, extra_check))
-            if any(k in extra_str for k in _any):
-                return True
+            if isinstance(extra_check, str):
+                extra_str += extra_check + ";"
+            else:
+                extra_str += ";".join(map(str, extra_check))
+        if any(k in extra_str for k in _any):
+            return True
         return False
     @staticmethod
     def if_then_add(tags:list[str], lookup:list[str]|str, _any:list[str]|str, not_any:list[str]|str, add:str):
