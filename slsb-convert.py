@@ -1273,8 +1273,8 @@ class PackageProcessor:
                     new_scenes[scene['id']] = scene
 
                 json_data['scenes'] = new_scenes
-                output_path = temp_edit_dir/slsb_json_path.name
-                output_path.write_text(json.dumps(json_data, indent=2), encoding='utf-8')
+            output_path = temp_edit_dir/slsb_json_path.name
+            output_path.write_text(json.dumps(json_data, indent=2), encoding='utf-8')
 
 #############################################################################################
 class ConvertUtils:
