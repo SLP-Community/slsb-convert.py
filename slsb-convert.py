@@ -377,7 +377,9 @@ class SLATE:
     def implement_hentairim_tags(scene_tags:list[str], stage_tags:list[str], rimtags:list[str]):
         TagUtils.bulk_add(scene_tags, ['postagged'])
         # removes all stage tags that would be added by HentaiRim
-        TagUtils.bulk_remove(scene_tags, [Keywords.HENTAIRIM_TAGS, 'leadin'])
+        hentairim_tags = Keywords.HENTAIRIM_TAGS.copy()
+        hentairim_tags.append("leadin")
+        TagUtils.bulk_remove(scene_tags, hentairim_tags)
         # each stage tagged differently based on HentaiRim interactions
         TagUtils.if_in_then_add(stage_tags, rimtags, ['sst', 'fst', 'bst'], 'stimulation')
         TagUtils.if_in_then_add(stage_tags, rimtags, ['kis'], 'kissing')
@@ -436,7 +438,9 @@ class SLATE:
             TagUtils.if_then_add(scene_tags,'', 'anal', 'vaginal', 'sranaltmp')
             TagUtils.if_then_add(scene_tags,'', 'vaginal', 'anal', 'srvagtmp')
             # removes all scene tags that would be added by ASL
-            TagUtils.bulk_remove(scene_tags, [Keywords.ASL_TAGS, 'leadin'])
+            asl_tags = Keywords.ASL_TAGS.copy()
+            asl_tags.append("leadin")
+            TagUtils.bulk_remove(scene_tags, asl_tags)
             # each stage tagged differently based on ASL interactions
             TagUtils.if_in_then_add(stage_tags, asltags, ['li'], 'leadin')
             TagUtils.if_in_then_add(stage_tags, asltags, ['sb', 'fb'], 'oral')
