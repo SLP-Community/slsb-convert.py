@@ -214,7 +214,7 @@ class TagsRepairer:
         TagUtils.if_then_remove(tags, ['invisfurn', 'furniture'], '', 'furniture')
         # unofficial standardization
         TagUtils.if_then_add(tags,lookup, ['femdom', 'amazon', 'cowgirl', 'femaledomination', 'female domination', 'leito xcross standing'], '', 'femdom')
-        TagUtils.if_then_add(tags,lookup, ['basescale', 'base scale', 'setscale', 'set scale', 'bigguy', 'bigman'], '', 'scaling')
+        TagUtils.if_then_add(tags,lookup, ['basescale', 'base scale', 'setscale', 'set scale', 'bigguy', 'bigman', 'petite'], '', 'scaling')
         TagUtils.if_then_add(tags,lookup, Keywords.FUTA, '', 'futa')
         TagUtils.bulk_remove(tags, ['vampire', 'vampirelord']) # will be added later after special checks
         # official standard tags
@@ -938,8 +938,10 @@ class ActorUtils:
                 scene_pos['scale'] = value
             if 'hcos small' in scene_name.lower() and scene_pos['race'] == 'Dragon':
                 scene_pos['scale'] = value
+        elif 'petite' in scene_tags and scene_pos['sex']['female'] and scene_pos['race'] == 'Human':
+            scene_pos['scale'] = 0.8
         else:
-            if scene_pos['sex']['male']:
+            if scene_pos['sex']['male'] and scene_pos['race'] == 'Human':
                 scene_pos['scale'] = 1.15
 
     @staticmethod
