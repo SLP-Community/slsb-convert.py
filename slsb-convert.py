@@ -1444,7 +1444,7 @@ class ConvertMain:
 
     @staticmethod
     def do_convert_bulk():
-        SLAnims_Paths:list[Path] = list(Arguments.parent_dir.rglob('SLAnims'))
+        SLAnims_Paths:list[Path] = list(Arguments.parent_dir.rglob('SLAnims', recurse_symlinks=True))
         if not SLAnims_Paths:
                 Arguments.debug("\033[91m\n[ERROR] No 'SLAnims' folders found inside the input directory. Please populate 'SLAL_Packs' with SLAL modules first.\033[0m")
                 return
@@ -1466,7 +1466,7 @@ class PostConversion: # HANDLES XMLs WITH SPACES (FOR ANUBS AND BAKA PACKS)
     @staticmethod
     def replicate_structure(source_dir:Path, required_structure:Path):
         behavior_hkx_map = {}
-        for behavior_hkx_path in required_structure.rglob('*.hkx'):
+        for behavior_hkx_path in required_structure.rglob('*.hkx', recurse_symlinks=True):
             hkx_parent_dir = behavior_hkx_path.parent.name.lower()
             if hkx_parent_dir == 'behaviors' or hkx_parent_dir == 'behaviors wolf':
                 relative_hkx_path = behavior_hkx_path.relative_to(required_structure)
