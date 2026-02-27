@@ -395,7 +395,8 @@ class SLATE:
         if 'blowjob' in stage_tags:
             TagUtils.if_then_add(stage_tags,'', 'vaginal', 'anal', 'spitroast')
             TagUtils.if_then_add(stage_tags,'', 'anal', 'vaginal', 'spitroast')
-            TagUtils.if_then_add(stage_tags,'', ['vaginal', 'anal'], '', 'triplepenetration')
+            if 'vaginal' in stage_tags and 'anal' in stage_tags:
+                stage_tags.append('triplepenetration')
         if 'sdp' in rimtags or 'fdp' in rimtags:
             TagUtils.bulk_add(stage_tags, 'doublepenetration')
         TagUtils.if_in_then_add(stage_tags, rimtags, ['fst','bst','fvp','fap','fcg','fac','fdp','fdv','fda','fhj','ftf','fmf','ffj','fbj'], 'posfast')
