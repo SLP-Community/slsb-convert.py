@@ -1,5 +1,5 @@
 # Script Version: 1.1 (to be used with SLSB v2.0.0+)
-from typing import ClassVar, Iterable, TextIO
+from typing import ClassVar, Iterable, TextIO, Any
 from datetime import datetime
 from pprint import pprint
 from pathlib import Path
@@ -112,7 +112,7 @@ class StoredData:
     slsb_jsons_data:ClassVar[dict] = {}
     slate_logs_data:ClassVar[list] = []
     cached_variables:ClassVar[dict] = {'action_logs_found': False} # also stores {'slal_json_filename': anim_dir_name}
-    xml_with_spaces:ClassVar[list[str]|str] = []
+    xml_with_spaces:ClassVar[list[str]] = []
     processed_slal_modules:ClassVar[set] = set()
     #pack-specific mutables
     slal_jsons_data:ClassVar[dict] = {}
@@ -120,7 +120,7 @@ class StoredData:
     slal_fnislists_data:ClassVar[dict] = {}
     unique_animlist_options:ClassVar[dict] = {}
     anim_cleanup_dirs:ClassVar[set] = set()
-    created_hardlinks:ClassVar[list[str]|str] = []
+    created_hardlinks:ClassVar[list[Path]] = []
     #actor-stage-specific mutable
     tmp_params:ClassVar[dict] = {'has_strap_on': '', 'has_schlong': '', 'has_add_cum': ''}
     pos_counts:ClassVar[dict[str, int|bool]] = {}
@@ -161,7 +161,7 @@ class TagUtils:
         if add not in tags and TagUtils.if_any_found(_list, _any):
             tags.append(add)
     @staticmethod
-    def if_then_remove(tags:list[str], all_in_tags:list[str], any_not_in_tags:list[str], remove:str):
+    def if_then_remove(tags:list[str], all_in_tags:list[str], any_not_in_tags:list[str]|str, remove:str):
         if remove in tags and all(item in tags for item in all_in_tags) and not TagUtils.if_any_found(tags, any_not_in_tags):
             tags.remove(remove)
     @staticmethod
@@ -237,7 +237,7 @@ class TagsRepairer:
         TagUtils.bulk_remove(tags, '')
 
     @staticmethod
-    def fix_submissive_tags(scene_name:str, scene_tags:list[str], anim_dir_name:str) -> None:
+    def fix_submissive_tags(scene_name:str, scene_tags:list[str], anim_dir_name:str) -> list[str]:
         sub_tags:dict[str,bool] = {
             'unconscious': False,   # necro stuff
             'gore': False,          # something gets chopped off
@@ -309,7 +309,7 @@ class TagsRepairer:
 class SLATE:
 
     @staticmethod
-    def insert_slate_tags(scene_name:str, scene_tags:list[str]|str, ):
+    def insert_slate_tags(scene_name:str, scene_tags:list[str]):
         if StoredData.cached_variables["action_logs_found"]:
             TagToAdd = ''
             TagToRemove = ''
@@ -323,7 +323,7 @@ class SLATE:
                         TagUtils.bulk_remove(scene_tags, TagToRemove)
 
     @staticmethod
-    def check_hentairim_tags(scene_tags:list[str], stage_tags:list[str], stage_num:int, pos_ind:str) -> None:
+    def check_hentairim_tags(scene_tags:list[str], stage_tags:list[str], stage_num:int, pos_ind:str) -> list[str]:
         rimtags = {
             'ldi': '{stage}{pos}ldi',  # lead_in
             'kis': '{stage}{pos}kis',  # kissing
@@ -405,7 +405,7 @@ class SLATE:
             TagUtils.bulk_add(stage_tags, 'leadin')
 
     @staticmethod
-    def check_asl_tags(scene_tags:list[str], stage_tags:list[str], stage_num:int) -> None:
+    def check_asl_tags(scene_tags:list[str], stage_tags:list[str], stage_num:int) -> list[str]:
         asltags = {
             'en': '{stage}en',  # end_stage
             'li': '{stage}li',  # lead_in
@@ -434,7 +434,7 @@ class SLATE:
 
     @staticmethod
     def implement_asl_tags(scene_tags:list[str], stage_tags:list[str], asltags:list[str]):
-        if not 'postagged' in scene_tags:
+        if 'postagged' not in scene_tags:
             # stores info on vaginal/anal tag presence (for spitroast)
             TagUtils.if_then_add(scene_tags,'', 'anal', 'vaginal', 'sranaltmp')
             TagUtils.if_then_add(scene_tags,'', 'vaginal', 'anal', 'srvagtmp')
@@ -743,7 +743,7 @@ class Editors:
             json_base_name:str = slal_json_path.stem
             if json_base_name not in StoredData.cached_variables:
                 StoredData.cached_variables[json_base_name] = {}
-            matching_source_path:Path = None
+            matching_source_path:Path | None = None
             if anim_source_dir.exists():
                 for source_file_path in anim_source_dir.glob('*.txt'):
                     if source_file_path.stem.lower() == json_base_name.lower():
@@ -768,9 +768,9 @@ class Editors:
                     return final_dir
             return ''
 
-        def fix_typegender(json_data:TextIO) -> bool:
+        def fix_typegender(json_data) -> bool:
             changes_made:bool = False
-            anim_data = json_data.get("animations")
+            anim_data = json_data.get("animations", [])
             for scene_data in anim_data:
                 for key, actor_data in enumerate(scene_data["actors"], 1):
                     if actor_data["type"].lower() == "type":
@@ -803,7 +803,7 @@ class Editors:
     @staticmethod
     def edit_output_fnis(list_parent_path:Path, list_name:str, list_out_path:Path|None):
         list_path:Path = list_parent_path/list_name
-        data_strean:TextIO = list_path.read_text(encoding='utf-8').splitlines()
+        data_strean:list[str] = list_path.read_text(encoding='utf-8').splitlines()
         modified_lines = []
         for line in data_strean:
             if not line.strip():
@@ -836,7 +836,7 @@ class Editors:
 class ActorUtils:
 
     @staticmethod
-    def process_pos_flag_futa_1(scene_tags:list[str], scene_pos:dict[str,any], pos_length:int, pos_num:int, event_name:str):
+    def process_pos_flag_futa_1(scene_tags:list[str], scene_pos:dict[str,Any], pos_length:int, pos_num:int, event_name:str):
         # initial preparations
         if 'futa' not in scene_tags:
             return
@@ -856,7 +856,7 @@ class ActorUtils:
                 scene_pos['sex']['futa'] = True
 
     @staticmethod
-    def process_pos_flag_sub(scene_tags:list[str], scene_pos:dict[str,any], pos_num:int, sub_tags:list[str], is_sub_scene:bool):
+    def process_pos_flag_sub(scene_tags:list[str], scene_pos:dict[str,Any], pos_num:int, sub_tags:list[str], is_sub_scene:bool):
         # IMP: Deal with sub/dead flags before futa flags
         if is_sub_scene:
             straight:bool = StoredData.pos_counts['straight']
@@ -882,7 +882,7 @@ class ActorUtils:
                 scene_pos['dead'] = True
 
     @staticmethod
-    def process_pos_flag_futa_2(scene_tags:list[str], scene_pos:dict[str,any], pos_num:int, actor_key:str):
+    def process_pos_flag_futa_2(scene_tags:list[str], scene_pos:dict[str,Any], pos_num:int, actor_key:str):
         if 'futa' not in scene_tags:
             return
         if 'anubs' in scene_tags and ('ff' in scene_tags or 'fff' in scene_tags):
@@ -897,7 +897,7 @@ class ActorUtils:
                     scene_pos['sex']['futa'] = True
 
     @staticmethod
-    def process_pos_flag_futa_3(scene_tags:list[str], scene_pos:dict[str,any], pos_length:int, pos_num:int):
+    def process_pos_flag_futa_3(scene_tags:list[str], scene_pos:dict[str,Any], pos_length:int, pos_num:int):
         if 'futa' not in scene_tags:
             return
         if 'solo' in scene_tags or 'futaall' in scene_tags or ('anubs' in scene_tags and 'mf' in scene_tags) or ('ff' in scene_tags and ('frotting' in scene_tags or 'milking' in scene_tags)):
@@ -913,7 +913,7 @@ class ActorUtils:
             scene_pos['sex']['futa'] = True
 
     @staticmethod
-    def process_pos_flag_vampire(scene_tags:list[str], scene_pos:dict[str,any], event_name:str):
+    def process_pos_flag_vampire(scene_tags:list[str], scene_pos:dict[str,Any], event_name:str):
         if 'vampire' not in scene_tags:
             return
         if TagUtils.if_any_found(scene_tags, ['vampirefemale','vampirelesbian', 'femdom', 'cowgirl', 'vampfeedf'], event_name) and scene_pos['sex']['female']:
@@ -945,21 +945,21 @@ class ActorUtils:
                 scene_pos['scale'] = 1.15
 
     @staticmethod
-    def process_pos_leadin(scene_tags:list[str], stage_pos:dict[str,any]):
+    def process_pos_leadin(scene_tags:list[str], stage_pos:dict[str,Any]):
         if 'leadin' in scene_tags:
             stage_pos['strip_data']['default'] = False
             stage_pos['strip_data']['helmet'] = True
             stage_pos['strip_data']['gloves'] = True
 
     @staticmethod
-    def process_pos_animobjects(stage_pos:dict[str,any], event_name:str):
+    def process_pos_animobjects(stage_pos:dict[str,Any], event_name:str):
         if event_name and event_name in StoredData.slal_fnislists_data.keys():
             required_info = StoredData.slal_fnislists_data[event_name]
             if required_info.get('anim_obj'):
                 stage_pos['anim_obj'] = ','.join(required_info['anim_obj'])
 
     @staticmethod
-    def allow_flexible_futa(scene_pos:dict[str,any], pos_num:int, actor_key:str):
+    def allow_flexible_futa(scene_pos:dict[str,Any], pos_num:int, actor_key:str):
         if Arguments.stricter_futa:
             return
         if actor_key[1:] in StoredData.tmp_params['has_strap_on']:
@@ -968,7 +968,7 @@ class ActorUtils:
                     scene_pos['sex']['futa'] = True
 
     @staticmethod
-    def relax_creature_gender(scene_pos:dict[str,any]):
+    def relax_creature_gender(scene_pos:dict[str,Any]):
         if scene_pos['race'] in Keywords.FEM_CRE_BODY_ONLY:
             scene_pos['sex']['female'] = True
             scene_pos['sex']['male'] = True
@@ -981,7 +981,7 @@ class ActorUtils:
 class ParamUtils:
 
     @staticmethod
-    def process_actorstage_params(params_data, stage_pos:dict[str,any], stage_num:int, pos_num:int, actor_key:str, event_key:str):
+    def process_actorstage_params(params_data, stage_pos:dict[str,Any], stage_num:int, pos_num:int, actor_key:str, event_key:str):
 
         def process_pos_sos():
             if 'sos' in params_data and params_data['sos'] != 0:
@@ -1031,7 +1031,7 @@ class ParamUtils:
         # - - - - - - - - - - - - -
 
     @staticmethod
-    def process_actor_params(params_data, stage_pos:dict[str,any], stage_num:int, pos_num:int, actor_key:str):
+    def process_actor_params(params_data, stage_pos:dict[str,Any], stage_num:int, pos_num:int, actor_key:str):
 
         def process_pos_cum():
             if 'add_cum' in params_data and params_data['add_cum'] != 0:
@@ -1055,7 +1055,7 @@ class ParamUtils:
         # - - - - - - - - - - - - -
 
     @staticmethod
-    def incorporate_slal_json_data(scene_name:str, scene_tags:list[str], scene_pos:dict[str,any], stage_pos:dict[str,any], stage_num:int, pos_num:int, mode:str):
+    def incorporate_slal_json_data(scene_name:str, scene_tags:list[str], scene_pos:dict[str,Any], stage_pos:dict[str,Any], stage_num:int, pos_num:int, mode:str):
         if scene_name in StoredData.slal_jsons_data:
             slal_json_data = StoredData.slal_jsons_data[scene_name]
             actor_map = slal_json_data['actors']
@@ -1072,7 +1072,7 @@ class ParamUtils:
                             ActorUtils.allow_flexible_futa(scene_pos, pos_num, actor_key)
 
     @staticmethod
-    def process_stage_params(scene_name:str, stage:dict[str,any], stage_num:int):
+    def process_stage_params(scene_name:str, stage:dict[str,Any], stage_num:int):
         if scene_name not in StoredData.slal_jsons_data:
             return
         slal_json_data = StoredData.slal_jsons_data[scene_name]
@@ -1147,20 +1147,20 @@ class StageUtils:
 class PackageProcessor:
 
     @staticmethod
-    def process_stage(scene_name:str, scene_tags:list[str], stage:dict[str,any], stage_num:int):
+    def process_stage(scene_name:str, scene_tags:list[str], stage:dict[str,Any], stage_num:int):
         stage_tags:list[str] = []
         stage['tags'] = stage_tags
         stage_positions:list[dict] = stage['positions']
 
         pos_length:int = len(stage_positions)
         for i in range(pos_length):
-            stage_pos:dict[str,any] = stage_positions[i]
+            stage_pos:dict[str,Any] = stage_positions[i]
             pos_num:int = i
             event_name:str|None = None
             if stage_pos['event'] and len(stage_pos['event']) > 0:
                 event_name = stage_pos['event'][0].lower()
             ActorUtils.process_pos_animobjects(stage_pos, event_name)
-            ParamUtils.incorporate_slal_json_data(scene_name, [], [], stage_pos, stage_num, pos_num, 'Stage')
+            ParamUtils.incorporate_slal_json_data(scene_name, [], {}, stage_pos, stage_num, pos_num, 'Stage')
             #ActorUtils.process_pos_leadin(scene_tags, stage_pos)
         
         ParamUtils.process_stage_params(scene_name, stage, stage_num)
@@ -1176,24 +1176,24 @@ class PackageProcessor:
         stages_conunt:int = len(stages)
         for i in range(stages_conunt):
             stage_num:int = i
-            stage:dict[str,any] = stages[stage_num]
+            stage:dict[str,Any] = stages[stage_num]
             stage_tags:list[str] = stage['tags']
             stage_positions:list[dict] = stage['positions']
             pos_length:int = len(stage_positions)
             for i in range(pos_length):
                 pos_num:int = i
-                stage_pos:dict[str,any] = stage_positions[pos_num]
-                scene_pos:dict[str,any] = scene_positions[pos_num]
+                stage_pos:dict[str,Any] = stage_positions[pos_num]
+                scene_pos:dict[str,Any] = scene_positions[pos_num]
                 #// DO_SOMETHING
 
     @staticmethod
-    def process_scene(scene:dict[str,any], anim_dir_name:str):
+    def process_scene(scene:dict[str,Any], anim_dir_name:str):
         scene_name:str = scene['name']
         stages:list[dict] = scene['stages']
         scene_positions:list[dict] = scene['positions']
-        furniture:dict[str,any] = scene['furniture']
+        furniture:dict[str,Any] = scene['furniture']
 
-        first_event_name:str|None = None
+        first_event_name:str = ''
         fist_event:str = stages[0]['positions'][0]['event']
         if fist_event and len(fist_event) > 0:
             first_event_name = fist_event[0].lower()
@@ -1220,13 +1220,13 @@ class PackageProcessor:
         
         pos_length:int = len(scene_positions)
         for i in range(pos_length):
-            scene_pos:dict[str,any] = scene_positions[i]
+            scene_pos:dict[str,Any] = scene_positions[i]
             pos_num:int = i
             ActorUtils.relax_creature_gender(scene_pos)
             TagsRepairer.fix_vampire_tags(scene_name, scene_tags, first_event_name, has_cre_vamplord)
             ActorUtils.process_pos_flag_futa_1(scene_tags, scene_pos, pos_length, pos_num, first_event_name)
             ActorUtils.process_pos_flag_sub(scene_tags, scene_pos, pos_num, sub_tags, is_sub_scene)
-            ParamUtils.incorporate_slal_json_data(scene_name, scene_tags, scene_pos, [], 0, pos_num, 'Scene')
+            ParamUtils.incorporate_slal_json_data(scene_name, scene_tags, scene_pos, {}, 0, pos_num, 'Scene')
             ActorUtils.process_pos_flag_vampire(scene_tags, scene_pos, first_event_name)
             ActorUtils.process_pos_flag_futa_3(scene_tags, scene_pos, pos_length, pos_num)
             ActorUtils.process_pos_scaling(scene_name, scene_tags, scene_pos)
