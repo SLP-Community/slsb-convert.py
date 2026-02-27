@@ -400,7 +400,7 @@ class SLATE:
         if 'sdp' in rimtags or 'fdp' in rimtags:
             TagUtils.bulk_add(stage_tags, 'doublepenetration')
         TagUtils.if_in_then_add(stage_tags, rimtags, ['fst','bst','fvp','fap','fcg','fac','fdp','fdv','fda','fhj','ftf','fmf','ffj','fbj'], 'posfast')
-        TagUtils.if_in_then_add(stage_tags, rimtags, ['sst','svp','sap','scg','sac','sdp','sdv','sda','shj','stf','smf','sfj','kis','cun','sbj'], 'posslow')
+        TagUtils.if_in_then_add(stage_tags, rimtags, ['sst','svp','sap','scg','sac','sdp','sdv','sda','shj','stf','smf','sfj','kis','sbj'], 'posslow')
         if not TagUtils.if_any_found(stage_tags, Keywords.HENTAIRIM_TAGS):
             TagUtils.bulk_add(stage_tags, 'leadin')
 
