@@ -594,7 +594,12 @@ class Parsers:
                 'scene_root': scene_data.get('root'),
                 'scene_graph': scene_data.get('graph')
             }
-            for i, stage_data in enumerate(scene_data.get('stages', {})):
+            for i, stage_data in enumerate(scene_data.get('stages', [])):
+                if i == 0:
+                    try:
+                        scene_info['scene_first_event'] = stage_data.get('positions', [])[0].get('event', [])[0]
+                    except IndexError:
+                        scene_info['scene_first_event'] = ''
                 extra = stage_data.get('extra')
                 stage_info = {
                     'stage_hash': stage_data.get('id'),
@@ -1262,7 +1267,7 @@ class PackageProcessor:
                 if json_data.get('pack_author') == 'Unknown':
                     json_data['pack_author'] = pack_data_old.get('pack_author')
                 scenes_old_lookup_map = {
-                    val['scene_name']: val['scene_hash'] 
+                    val['scene_first_event']: (val['scene_hash'], val['scene_name'])
                     for val in pack_data_old.get('scenes', {}).values()
                 }
                 scenes = json_data.get('scenes', {})
@@ -1270,8 +1275,12 @@ class PackageProcessor:
                 new_scenes = {}
                 for scene_id, scene in sorted_scene_items:
                     current_scene_name = scene.get('name')
-                    if current_scene_name in scenes_old_lookup_map:
-                        scene['id'] = scenes_old_lookup_map[current_scene_name]
+                    try:
+                        current_scene_first_event = scene.get('stages', [])[0].get('positions', [])[0].get('event', [])[0]
+                    except IndexError:
+                        current_scene_first_event = ''
+                    if current_scene_first_event in scenes_old_lookup_map and current_scene_name == scenes_old_lookup_map[current_scene_first_event][1]:
+                        scene['id'] = scenes_old_lookup_map[current_scene_first_event][0]
                     PackageProcessor.process_scene(scene, anim_dir_name)
                     new_scenes[scene['id']] = scene
 
