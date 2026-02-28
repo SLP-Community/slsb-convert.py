@@ -1470,12 +1470,12 @@ class PostConversion: # HANDLES XMLs WITH SPACES (FOR ANUBS AND BAKA PACKS)
             hkx_parent_dir = behavior_hkx_path.parent.name.lower()
             if hkx_parent_dir == 'behaviors' or hkx_parent_dir == 'behaviors wolf':
                 relative_hkx_path = behavior_hkx_path.relative_to(required_structure)
-                behavior_hkx_map.setdefault(behavior_hkx_path.name, []).append(relative_hkx_path)
+                behavior_hkx_map.setdefault(behavior_hkx_path.name.lower(), []).append(relative_hkx_path)
         for tmp_hkx_path in list(source_dir.rglob('*')):
             if not tmp_hkx_path.is_file() or tmp_hkx_path.suffix.lower() != '.hkx':
                 continue
-            if tmp_hkx_path.name in behavior_hkx_map:
-                req_paths = behavior_hkx_map[tmp_hkx_path.name]
+            if tmp_hkx_path.name.lower() in behavior_hkx_map:
+                req_paths = behavior_hkx_map[tmp_hkx_path.name.lower()]
                 if len(req_paths) > 1:
                     Arguments.debug(f"\033[93m---> {len(req_paths)} instances found for {tmp_hkx_path.name}:\033[0m")
                     Arguments.debug([p.as_posix() for p in req_paths])
