@@ -962,23 +962,24 @@ class ActorUtils:
                 stage_pos['anim_obj'] = ','.join(required_info['anim_obj'])
 
     @staticmethod
-    def allow_flexible_futa(scene_pos:dict[str,Any], pos_num:int, actor_key:str):
-        if Arguments.stricter_futa:
+    def allow_flexible_futa(scene_tags: list[str], scene_pos: dict[str, Any], pos_num: int, actor_key: str, flexibility_lvl: int):
+        if ((Arguments.stricter_futa) or (flexibility_lvl <= 0) or ('futa' in scene_tags) or (scene_pos['race'] != 'Human')):
             return
-        if actor_key[1:] in StoredData.tmp_params['has_strap_on']:
-            if pos_num == int(actor_key[1:]) - 1:
-                if scene_pos['race'] == 'Human':
+        if flexibility_lvl > 0:  # creature with human males only
+            if (StoredData.pos_counts['cre_count'] and StoredData.pos_counts['human_male']) and (StoredData.pos_counts['human_female'] == 0):
+                scene_pos['sex']['futa'] = True
+        if flexibility_lvl > 1:  # human pos having strapon info in slal
+            if actor_key[1:] in StoredData.tmp_params['has_strap_on']:
+                if pos_num == int(actor_key[1:]) - 1:
                     scene_pos['sex']['futa'] = True
+        if flexibility_lvl > 2:  # all human pos (except in futa-exclusive scenes)
+            scene_pos['sex']['futa'] = True
 
     @staticmethod
     def relax_creature_gender(scene_pos:dict[str,Any]):
         if scene_pos['race'] in Keywords.FEM_CRE_BODY_ONLY:
             scene_pos['sex']['female'] = True
             scene_pos['sex']['male'] = True
-        if StoredData.pos_counts['human_male'] and StoredData.pos_counts['cre_female'] and \
-            (StoredData.pos_counts['cre_male'] + StoredData.pos_counts['human_female'] == 0):
-            if scene_pos['sex']['male']:
-                scene_pos['sex']['futa'] = True
 
 #############################################################################################
 class ParamUtils:
@@ -1072,7 +1073,7 @@ class ParamUtils:
                         elif mode == 'Scene':
                             # Actor-Specific Fine Tuning
                             ActorUtils.process_pos_flag_futa_2(scene_tags, scene_pos, pos_num, actor_key)
-                            ActorUtils.allow_flexible_futa(scene_pos, pos_num, actor_key)
+                            ActorUtils.allow_flexible_futa(scene_tags, scene_pos, pos_num, actor_key, 3)
 
     @staticmethod
     def process_stage_params(scene_name:str, stage:dict[str,Any], stage_num:int):
