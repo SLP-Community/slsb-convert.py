@@ -1540,7 +1540,7 @@ def execute_script():
     ConvertUtils.execute_slsb_parsers()
     ConvertMain.do_convert_bulk()
     PostConversion.reattempt_behaviour_gen()
-    if Arguments.tmp_log_dir.exists():
+    if Arguments.tmp_log_dir and Arguments.tmp_log_dir.exists():
         shutil.rmtree(Arguments.tmp_log_dir)
         Arguments.tmp_log_dir.mkdir(parents=True, exist_ok=True)
     end_time = time.time()
