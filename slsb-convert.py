@@ -8,6 +8,7 @@ import argparse
 import shutil
 import json
 import time
+import sys
 import re
 
 class Arguments:
@@ -93,6 +94,7 @@ class Keywords:
         'thrones': ['Throne', 'ThroneRiften', 'ThroneNordic'],
         'contraptions': ['XCross', 'Pillory']}
     TIMESTAMP = datetime.now().strftime('[%Y.%m.%d_%H.%M.%S]')
+    IS_WINDOWS = sys.platform == 'win32'
     # Regex Patterns
     ANIM_PREFIX_PATTERN = re.compile(r'^\s*anim_name_prefix\("([^"]*)"\)', re.IGNORECASE)
     DIR_NAME_PATTERN = re.compile(r'anim_dir\("([^"]*)"\)', re.IGNORECASE)
@@ -1384,7 +1386,7 @@ class ConvertUtils:
  
         Arguments.debug('generating', behavior_file_name)
         cli_fnis_tool_path:Path = Arguments.fnis_path/'commandlinefnisformodders.exe'
-        input_command:list[str] = [str(cli_fnis_tool_path), str(list_path)]
+        input_command:list[str] = ConvertUtils.wine_wrap(str(cli_fnis_tool_path)) + [str(list_path)]
         subprocess.run(input_command, cwd=Arguments.fnis_path, capture_output=True, check=True)
 
         list_path_parts = list_path.parts
@@ -1401,6 +1403,12 @@ class ConvertUtils:
 
         if Arguments.remove_anims:
             StoredData.anim_cleanup_dirs.add(list_parent_path)
+
+    @staticmethod
+    def wine_wrap(exe_path: str) -> list[str]:
+        if Keywords.IS_WINDOWS:
+            return [exe_path]
+        return ['wine', exe_path]
 
 #############################################################################################
 class ConvertMain:
@@ -1424,14 +1432,14 @@ class ConvertMain:
         Arguments.debug("---------> CONVERTING SLAL TO SLSB PROJECTS")
         for json_path in slal_jsons_dir.glob('*.json'):
             Arguments.debug(f"converting {json_path.name}")
-            input_command:list[str] = [str(Arguments.slsb_path), 'convert', '--in', str(json_path), '--out', str(Arguments.temp_dir)]
+            input_command:list[str] = ConvertUtils.wine_wrap(str(Arguments.slsb_path)) + ['convert', '--in', str(json_path), '--out', str(Arguments.temp_dir)]
             result = subprocess.run(input_command, capture_output=True, text=True, check=True)
             #Arguments.debug(result.stdout)
 
         Arguments.debug("---------> EDITING OUTPUT SLSB PROJECTS")
         PackageProcessor.edit_slsb_json()
         for tmp_json_path in temp_edit_dir.glob('*.slsb.json'):
-            input_command:list[str] = [str(Arguments.slsb_path), 'build', '--in', str(tmp_json_path), '--out', str(module_out_path)]
+            input_command:list[str] = ConvertUtils.wine_wrap(str(Arguments.slsb_path)) + ['build', '--in', str(tmp_json_path), '--out', str(module_out_path)]
             result = subprocess.run(input_command, capture_output=True, text=True, check=True)
             target_project_path = slsb_project_dir/tmp_json_path.name
             shutil.copy2(tmp_json_path, target_project_path)
@@ -1525,7 +1533,7 @@ class PostConversion: # HANDLES XMLs WITH SPACES (FOR ANUBS AND BAKA PACKS)
         for xml_file_path in tmp_xml_subdir.glob("*.xml"):
             Arguments.debug(f'converting: {xml_file_path.stem}')
             hkx_output_path:Path = tmp_hkx_subdir/xml_file_path.with_suffix('.hkx').name
-            input_command:list[str] = [str(hkxcmd_path), 'convert', '-v:amd64', str(xml_file_path), str(hkx_output_path)]
+            input_command:list[str] = ConvertUtils.wine_wrap(str(hkxcmd_path)) + ['convert', '-v:amd64', str(xml_file_path), str(hkx_output_path)]
             subprocess.run(input_command, check=True, capture_output=True)
         Arguments.debug("---------> replicating source structure")
         PostConversion.replicate_structure(tmp_hkx_subdir, Arguments.parent_dir)
