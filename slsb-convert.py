@@ -532,6 +532,134 @@ class SLATE:
             SLATE.correct_aslsfx_tags(scene_tags, stage_tags, stage_num)
 
 #############################################################################################
+class GuessPosTags:
+
+    @staticmethod
+    def guess_missing_pos_tags(scene_tags:list[str], scene_positions:list[dict], stages:list[dict], is_sub_scene:bool):
+        # actor configuration info
+        StageUtils.update_pos_counts(scene_positions)
+        pos_count = StoredData.pos_counts
+        straight:bool = pos_count['straight']
+        gay:bool = pos_count['gay']
+        lesbian:bool = pos_count['lesbian']
+        futa_w_male:bool = pos_count['futa_w_male']
+        futa_w_female:bool = pos_count['futa_w_female']
+        futa_w_futa:bool = pos_count['futa_w_futa']
+        has_creatures:bool = pos_count['cre_count'] > 0
+
+        pos_num_male:list[str] = [i for i in range(len(scene_positions)) if scene_positions[i]['sex']['male']]
+        
+        stages_count:int = len(stages)
+        for stage_num in range(stages_count):
+            stage:dict[str,Any] = stages[stage_num]
+            stage_positions:list[dict] = stage['positions']
+            pos_length:int = len(stage_positions)
+
+            # stage nature info
+            tag_69:bool = 'sixtynine' in scene_tags
+            tag_oral:bool = 'oral' in scene_tags and not tag_69
+            tag_bj:bool = 'blowjob' in scene_tags and not tag_69
+            tag_cun:bool = 'cunnilingus' in scene_tags and not tag_69
+            tag_vaginal:bool = 'vaginal' in scene_tags
+            tag_anal:bool = 'anal' in scene_tags
+            tag_toys:bool = 'toys' in scene_tags
+            tag_sr:bool = ('spitroast' in scene_tags or (tag_oral and (tag_anal or tag_vaginal))) and pos_length >= 3
+            tag_dp:bool = ('doublepenetration' in scene_tags or (tag_vaginal and tag_anal and not tag_oral)) and pos_length >= 3
+            tag_tp:bool = ('triplepenetration' in scene_tags or (tag_oral and tag_vaginal and tag_anal)) and pos_length >= 4
+
+            for pos_num in range(pos_length):
+                scene_pos:dict = scene_positions[pos_num]
+                stage_pos:dict = stage_positions[pos_num]
+                pos_tags: list[str] = stage_pos['tags']
+
+                # gender and race info
+                is_male:bool = scene_pos['sex']['male']
+                is_female:bool = scene_pos['sex']['female']
+                is_futa:bool = scene_pos['sex']['futa'] and not is_male and not is_female
+                is_sub:bool = scene_pos['submissive']
+                is_human:bool = scene_pos['race'] == 'Human'
+
+                # interaction role info
+                mouth_active:bool = GuessPosTags.is_mouth_active(pos_num, is_female, is_male, is_futa, is_human,
+                                    is_sub_scene, is_sub, straight, gay, lesbian, futa_w_male, futa_w_female,
+                                    futa_w_futa, has_creatures, tag_cun, tag_bj)
+                pp_active:bool = GuessPosTags.is_pp_active(pos_num, is_female, is_male, is_futa, is_human,
+                                    is_sub_scene, is_sub, straight, gay, lesbian, futa_w_male, futa_w_female,
+                                    futa_w_futa, has_creatures, tag_vaginal, tag_anal, tag_toys)
+
+                if tag_69:
+                    TagUtils.bulk_add(pos_tags, ['aOral', 'pOral'])
+                if not (tag_sr or tag_dp or tag_tp):
+                    if tag_oral:
+                        TagUtils.bulk_add(pos_tags, 'aOral' if mouth_active else 'pOral')
+                    elif tag_vaginal:
+                        TagUtils.bulk_add(pos_tags, 'aVaginal' if pp_active else 'pVaginal')
+                    elif tag_anal:
+                        TagUtils.bulk_add(pos_tags, 'aAnal' if pp_active else 'pAnal')
+                else:
+                    if pos_num not in pos_num_male: #female/futa
+                        if tag_oral:
+                            TagUtils.bulk_add(pos_tags, 'aOral' if mouth_active else 'pOral')
+                        if tag_vaginal:
+                            TagUtils.bulk_add(pos_tags, 'aVaginal' if pp_active else 'pVaginal')
+                        if tag_anal:
+                            TagUtils.bulk_add(pos_tags, 'aAnal' if pp_active else 'pAnal')
+                    else:
+                        idx:int = pos_num_male.index(pos_num) #male
+                        if tag_sr:
+                            pen_tag_sr:str = 'aVaginal' if tag_vaginal else 'aAnal'
+                            TagUtils.bulk_add(pos_tags, 'aOral' if idx == 1 else pen_tag_sr)
+                        elif tag_dp:
+                            TagUtils.bulk_add(pos_tags, 'aVaginal' if idx == 0 else 'aAnal')
+                        elif tag_tp:
+                            if idx == 0: TagUtils.bulk_add(pos_tags, 'aVaginal')
+                            elif idx == 1: TagUtils.bulk_add(pos_tags, 'aAnal')
+                            elif idx == 2: TagUtils.bulk_add(pos_tags, 'aOral')
+
+                stage_pos['tags'] = pos_tags
+
+            TagUtils.bulk_add(scene_tags, 'postagged')
+
+
+    @staticmethod
+    def is_mouth_active(pos_num, is_female, is_male, is_futa, is_human, is_sub_scene, is_sub, straight, gay, lesbian,
+            futa_w_male, futa_w_female, futa_w_futa, has_creatures, tag_cun, tag_bj) -> bool:
+        
+        if tag_cun and not tag_bj:
+            if straight or futa_w_male:
+                return is_male
+            if futa_w_female:
+                return is_futa if not has_creatures else not is_human
+            if lesbian or futa_w_futa:
+                if is_sub_scene:
+                    return is_sub
+                else:
+                    return pos_num > 0 if not has_creatures else not is_human
+        else:
+            if straight or futa_w_female:
+                return is_female
+            if futa_w_male:
+                return is_futa if not has_creatures else not is_human
+            if gay or lesbian or futa_w_futa:
+                if is_sub_scene:
+                    return is_sub
+                else:
+                    return pos_num > 0 if not has_creatures else not is_human
+        return False
+
+    @staticmethod
+    def is_pp_active(pos_num, is_female, is_male, is_futa, is_human, is_sub_scene, is_sub, straight, gay, lesbian,
+            futa_w_male, futa_w_female, futa_w_futa, has_creatures, tag_vaginal, tag_anal, tag_toys) -> bool:
+
+        if straight or futa_w_female:
+            return (is_male or is_futa)
+        elif futa_w_male and tag_vaginal:
+            return is_male
+        elif (futa_w_male and tag_anal) or (gay and tag_anal) or futa_w_futa or (lesbian and tag_toys):
+            return not is_sub if is_sub_scene else pos_num > 0
+        return False
+
+#############################################################################################
 class Parsers:
 
     @staticmethod
@@ -1188,23 +1316,6 @@ class PackageProcessor:
         #-----------------
 
     @staticmethod
-    def process_position_combined(scene_positions:list[dict], stages:list[dict], is_sub_scene:bool):
-        # This function exists owing to separation of position info in SLR v4 to stage and scene levels.
-        StageUtils.update_pos_counts(scene_positions)
-        stages_conunt:int = len(stages)
-        for i in range(stages_conunt):
-            stage_num:int = i
-            stage:dict[str,Any] = stages[stage_num]
-            stage_tags:list[str] = stage['tags']
-            stage_positions:list[dict] = stage['positions']
-            pos_length:int = len(stage_positions)
-            for i in range(pos_length):
-                pos_num:int = i
-                stage_pos:dict[str,Any] = stage_positions[pos_num]
-                scene_pos:dict[str,Any] = scene_positions[pos_num]
-                #// DO_SOMETHING
-
-    @staticmethod
     def process_scene(scene:dict[str,Any], anim_dir_name:str):
         scene_name:str = scene['name']
         stages:list[dict] = scene['stages']
@@ -1251,7 +1362,8 @@ class PackageProcessor:
 
         TagsRepairer.fix_toys_tag(scene_tags, anim_obj_found)
         StageUtils.process_scene_furniture(scene_name, scene_tags, furniture, pos_length, anim_obj_found)
-        PackageProcessor.process_position_combined(scene_positions, stages, is_sub_scene) 
+        if 'postagged' not in scene_tags:
+            GuessPosTags.guess_missing_pos_tags(scene_tags, scene_positions, stages, is_sub_scene)
 
         # marks scenes as private (for manual conversion)
         if anim_dir_name == 'ZaZAnimsSLSB' or anim_dir_name == 'DDSL': #or anim_dir_name == 'EstrusSLSB'
