@@ -155,9 +155,11 @@ class TagUtils:
             return True
         return False
     @staticmethod
-    def if_then_add(tags:list[str], lookup:list[str]|str, _any:list[str]|str, not_any:list[str]|str, add:str):
-        if add not in tags and TagUtils.if_any_found(tags, _any, lookup) and (not not_any or not TagUtils.if_any_found(tags, not_any)):
-            tags.append(add)
+    def if_then_add(tags:list[str], lookup:list[str]|str, _any:list[str]|str, not_any: list[str]|str, add:list[str]|str):
+        if isinstance(add, str): add = [add]
+        for item in add:
+            if item not in tags and TagUtils.if_any_found(tags, _any, lookup) and (not not_any or not TagUtils.if_any_found(tags, not_any)):
+                tags.append(item)
     @staticmethod
     def if_in_then_add(tags:list[str], _list:list[str], _any:list[str]|str, add:str):
         if add not in tags and TagUtils.if_any_found(_list, _any):
@@ -218,11 +220,13 @@ class TagsRepairer:
         TagUtils.if_then_add(tags,lookup, ['femdom', 'amazon', 'cowgirl', 'femaledomination', 'female domination', 'leito xcross standing'], '', 'femdom')
         TagUtils.if_then_add(tags,lookup, ['basescale', 'base scale', 'setscale', 'set scale', 'bigguy', 'bigman'], '', 'scaling')
         TagUtils.if_then_add(tags,lookup, Keywords.FUTA, '', 'futa')
-        TagUtils.bulk_remove(tags, ['vampire', 'vampirelord']) # will be added later after special checks
+        TagUtils.bulk_remove(tags, ['vampire', 'vampirelord']) # added later after special checks
         # official standard tags
         TagUtils.if_then_add(tags,lookup, ['mage', 'staff', 'alteration', 'rune', 'magicdildo', 'magic'], '', 'magic')
         TagUtils.if_then_add(tags,lookup, ['dp', 'doublepen'], '', 'doublepenetration')
         TagUtils.if_then_add(tags,lookup, ['tp', 'triplepen'], '', 'triplepenetration')
+        TagUtils.if_then_add(tags,lookup, ['doublepenetration'], '', ['vaginal', 'anal'])
+        TagUtils.if_then_add(tags,lookup, ['triplepenetration'], '', ['oral', 'vaginal', 'anal'])
         TagUtils.if_then_add(tags,lookup, ['guro', 'execution'], '', 'gore')
         TagUtils.if_then_add(tags,lookup, ['choke', 'choking'], '', 'asphyxiation')
         TagUtils.if_then_add(tags,lookup, ['titfuck', 'tittyfuck'], '', 'boobjob')
@@ -235,6 +239,7 @@ class TagsRepairer:
         TagUtils.if_then_add(tags,lookup, ['kiss'], '', 'kissing')
         TagUtils.if_then_add(tags,lookup, ['hold'], '', 'holding')
         TagUtils.if_then_add(tags,lookup, ['69'], '', 'sixtynine')
+        TagUtils.if_then_add(tags,lookup, ['sixtynine'], '', 'oral')
         TagUtils.remove_similar(tags)
         TagUtils.bulk_remove(tags, '')
 
@@ -1099,9 +1104,9 @@ class StageUtils:
     @staticmethod
     def update_pos_counts(scene_positions:list[dict]):
         def reset_pos_counts():
-            for key in ['male', 'female', 'human_male', 'cre_male', 'human_female', 'cre_female', 'cre_count']:
+            for key in ['male', 'female', 'futa_only', 'human_male', 'cre_male', 'human_female', 'cre_female', 'cre_count']:
                 StoredData.pos_counts[key] = 0
-            for key in ['straight', 'gay', 'lesbian']:
+            for key in ['straight', 'gay', 'lesbian', 'futa_w_male', 'futa_w_female', 'futa_w_futa']:
                 StoredData.pos_counts[key] = False
         reset_pos_counts()
         for tmp_scene_pos in scene_positions:
@@ -1112,12 +1117,19 @@ class StageUtils:
             if tmp_scene_pos['sex']['female']:
                 StoredData.pos_counts['female'] += 1
                 StoredData.pos_counts['human_female' if is_human else 'cre_female'] += 1
+            if tmp_scene_pos['sex']['futa']:
+                if not tmp_scene_pos['sex']['male'] and not tmp_scene_pos['sex']['female'] :
+                    StoredData.pos_counts['futa_only'] += 1
         StoredData.pos_counts['cre_count'] = StoredData.pos_counts['cre_male'] + StoredData.pos_counts['cre_female']
         male_count = StoredData.pos_counts['male']
         female_count = StoredData.pos_counts['female']
-        StoredData.pos_counts['straight'] = male_count > 0 and female_count > 0
-        StoredData.pos_counts['gay'] = male_count > 0 and female_count == 0
-        StoredData.pos_counts['lesbian'] = male_count == 0 and female_count > 0
+        futa_count = StoredData.pos_counts['futa_only']
+        StoredData.pos_counts['straight'] = male_count > 0 and female_count > 0 and futa_count == 0
+        StoredData.pos_counts['gay'] = male_count > 1 and female_count == 0 and futa_count == 0
+        StoredData.pos_counts['lesbian'] = male_count == 0 and female_count > 1 and futa_count == 0
+        StoredData.pos_counts['futa_w_male'] = male_count > 0 and female_count == 0 and futa_count > 0
+        StoredData.pos_counts['futa_w_female'] = male_count == 0 and female_count > 0 and futa_count > 0
+        StoredData.pos_counts['futa_w_futa'] = male_count == 0 and female_count == 0 and futa_count > 1
 
     @staticmethod
     def process_scene_furniture(scene_name:str, scene_tags:list[str], furniture:dict, pos_length:int, anim_obj_found:bool):
@@ -1460,7 +1472,9 @@ class ConvertMain:
 
     @staticmethod
     def do_convert_bulk():
-        SLAnims_Paths:list[Path] = list(Arguments.parent_dir.rglob('SLAnims', recurse_symlinks=True))
+        if Arguments.temp_dir.exists():
+            shutil.rmtree(Arguments.temp_dir)
+        SLAnims_Paths:list[Path] = sorted(d for d in Arguments.parent_dir.rglob('SLAnims', recurse_symlinks=True) if d.is_dir())
         if not SLAnims_Paths:
                 Arguments.debug("\033[91m\n[ERROR] No 'SLAnims' folders found inside the input directory. Please populate 'SLAL_Packs' with SLAL modules first.\033[0m")
                 return
