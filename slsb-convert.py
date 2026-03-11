@@ -1,4 +1,4 @@
-# Script Version: 1.1 (to be used with SLSB v2.0.0+)
+# Script Version: 1.2 (to be used with SLSB v2.0.1+)
 from typing import ClassVar, Iterable, TextIO, Any
 from datetime import datetime
 from pprint import pprint
