@@ -1385,7 +1385,10 @@ class PackageProcessor:
             json_data = json.loads(slsb_json_path.read_text(encoding='utf-8'))
             json_data['pack_author'] = Arguments.author
             pack_name:str = json_data.get('pack_name')
-            scenes_old_lookup_map = {}
+            scenes = json_data.get('scenes', {})
+            sorted_scene_items = sorted(scenes.items(), key=lambda item: item[1].get('name', ''))
+            new_scenes = {}
+
             if pack_name in StoredData.slsb_jsons_data:
                 pack_data_old = StoredData.slsb_jsons_data[pack_name]
                 json_data['prefix_hash'] = pack_data_old.get('pack_hash')
@@ -1395,9 +1398,7 @@ class PackageProcessor:
                     val['scene_first_event']: (val['scene_hash'], val['scene_name'])
                     for val in pack_data_old.get('scenes', {}).values()
                 }
-                scenes = json_data.get('scenes', {})
-                sorted_scene_items = sorted(scenes.items(), key=lambda item: item[1].get('name', ''))
-                new_scenes = {}
+
                 for scene_id, scene in sorted_scene_items:
                     current_scene_name = scene.get('name')
                     try:
@@ -1408,8 +1409,12 @@ class PackageProcessor:
                         scene['id'] = scenes_old_lookup_map[current_scene_first_event][0]
                     PackageProcessor.process_scene(scene, anim_dir_name)
                     new_scenes[scene['id']] = scene
+            else:
+                for scene_id, scene in sorted_scene_items:
+                    PackageProcessor.process_scene(scene, anim_dir_name)
+                    new_scenes[scene['id']] = scene
 
-                json_data['scenes'] = new_scenes
+            json_data['scenes'] = new_scenes
             output_path = temp_edit_dir/slsb_json_path.name
             output_path.write_text(json.dumps(json_data, indent=2), encoding='utf-8')
 
